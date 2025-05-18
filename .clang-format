@@ -1,0 +1,23 @@
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+AccessModifierOffset: -4
+IndentCaseLabels: true
+InsertBraces: true
+
+AlignAfterOpenBracket: BlockIndent
+PenaltyReturnTypeOnItsOwnLine: 100000
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+
+PenaltyBreakAssignment: 100
+
+AlwaysBreakTemplateDeclarations: Yes
+RequiresClausePosition: WithPreceding
+
+PointerAlignment: Left

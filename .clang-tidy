@@ -1,0 +1,17 @@
+Checks: >
+  bugprone-*,
+    -bugprone-reserved-identifier,
+  cppcoreguidelines-*,
+  modernize-trailing-return-type,
+  performance-*,
+  readability-*,
+    -readability-identifier-length,
+    -readability-identifier-naming,
+
+# modernize-* - disabled because of https://github.com/llvm/llvm-project/issues/168360
+
+# -bugprone-reserved-identifier,
+# -readability-identifier-naming - disabled becasue of a crash in clang-tidy version 21.1.5
+
+WarningsAsErrors: 'bugprone-*'
+FormatStyle: file

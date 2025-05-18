@@ -1,0 +1,16 @@
+[submodule "boost"]
+	path = external/boost
+	url = https://github.com/boostorg/boost.git
+	ignore = dirty
+[submodule "libusb"]
+	path = external/libusb
+	url = https://github.com/libusb/libusb.git
+	ignore = dirty
+[submodule "CMake"]
+	path = external/CMake
+	url = https://github.com/Kitware/CMake.git
+	ignore = dirty
+[submodule "ninja"]
+	path = external/ninja
+	url = https://github.com/ninja-build/ninja.git
+	ignore = dirty

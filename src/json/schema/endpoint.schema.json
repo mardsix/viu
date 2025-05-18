@@ -1,0 +1,50 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Endpoint Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bLength": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDescriptorType": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bEndpointAddress": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bmAttributes": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "wMaxPacketSize": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "bInterval": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bRefresh": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bSynchAddress": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        }
+      },
+      "required": [
+        "bLength",
+        "bDescriptorType",
+        "bEndpointAddress",
+        "bmAttributes",
+        "wMaxPacketSize",
+        "bInterval"
+      ]
+    },
+    "daExtra": {
+      "$ref": "types.schema.json#/$defs/daUsbBytes"
+    }
+  },
+  "required": [
+    "Endpoint Descriptor"
+  ]
+}

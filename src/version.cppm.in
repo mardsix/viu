@@ -1,0 +1,11 @@
+export module viu.version;
+
+namespace viu {
+
+export constexpr auto git_sha = "@GIT_SHA@";
+export constexpr auto app_version = "@APP_VERSION@";
+export constexpr auto app_full_version = "@APP_FULL_VERSION@";
+export constexpr auto lib_version = "@LIB_VERSION@";
+export constexpr auto lib_full_version = "@LIB_FULL_VERSION@";
+
+}

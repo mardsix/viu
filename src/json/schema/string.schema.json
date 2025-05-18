@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "wLanguageId": {
+      "$ref": "types.schema.json#/$defs/usbWord"
+    },
+    "aofStrings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "StringDescriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bLength": {
+                "$ref": "types.schema.json#/$defs/usbByte"
+              },
+              "bDescriptorType": {
+                "$ref": "types.schema.json#/$defs/usbByte"
+              },
+              "string": {
+                "type": [
+                  "string",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "bLength",
+              "bDescriptorType",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "StringDescriptor"
+        ]
+      }
+    }
+  },
+  "required": [
+    "wLanguageId",
+    "aofStrings"
+  ]
+}

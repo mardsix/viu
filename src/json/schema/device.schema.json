@@ -1,0 +1,90 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Device Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bLength": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDescriptorType": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bcdUSB": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "bDeviceClass": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDeviceSubClass": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDeviceProtocol": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bMaxPacketSize0": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "idVendor": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "idProduct": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "bcdDevice": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "iManufacturer": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "iProduct": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "iSerial": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bNumConfigurations": {
+          "$ref": "types.schema.json#/$defs/usbByte",
+          "minimum": 1
+        },
+        "aofConfigurations": {
+          "type": "array",
+          "items": {
+            "$ref": "configuration.schema.json"
+          }
+        }
+      },
+      "required": [
+        "bLength",
+        "bDescriptorType",
+        "bcdUSB",
+        "bDeviceClass",
+        "bDeviceSubClass",
+        "bDeviceProtocol",
+        "bMaxPacketSize0",
+        "idVendor",
+        "idProduct",
+        "bcdDevice",
+        "iManufacturer",
+        "iProduct",
+        "iSerial",
+        "bNumConfigurations",
+        "aofConfigurations"
+      ]
+    },
+    "aofStringDescriptors": {
+      "type": "array",
+      "items": {
+        "$ref": "string.schema.json"
+      }
+    },
+    "daReportDescriptor": {
+      "$ref": "types.schema.json#/$defs/daUsbBytes"
+    },
+    "BOS Descriptor": {
+      "$ref": "bos.schema.json"
+    }
+  }
+}

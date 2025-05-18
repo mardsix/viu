@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import subprocess
+import sys
+
+
+ROOT_DIR = os.getcwd()
+
+
+def run(cmd, cwd=None, check=True):
+    print("+", " ".join(cmd))
+    subprocess.run(cmd, cwd=cwd, check=check)
+
+
+def symlink(src, dst):
+    try:
+        os.symlink(src, dst)
+    except FileExistsError:
+        pass
+
+
+
+def build_boost():
+    src = os.path.join(ROOT_DIR, "external", "boost")
+    install = os.path.join(ROOT_DIR, "out", "install", "boost")
+
+    run(["./bootstrap.sh", "--with-toolset=clang", f"--prefix={install}"], cwd=src)
+    run(["./b2", "clean"], cwd=src)
+    run([
+        "./b2",
+        "toolset=clang",
+        "cxxflags=-stdlib=libc++",
+        "cxxflags=-fPIC",
+        "linkflags=-stdlib=libc++",
+        "link=shared",
+        "threading=multi",
+        "install",
+        f"--prefix={install}",
+    ], cwd=src)
+
+
+def build_libusb():
+    src = os.path.join(ROOT_DIR, "external", "libusb")
+    install = os.path.join(ROOT_DIR, "out", "install", "libusb")
+
+    run(["./bootstrap.sh"], cwd=src)
+    run([
+        "./configure",
+        f"--prefix={install}",
+        "--enable-static",
+        "--with-pic",
+    ], cwd=src)
+    run(["make"], cwd=src)
+    run(["make", "install"], cwd=src)
+
+
+def build_cmake():
+    src = os.path.join(ROOT_DIR, "external", "CMake")
+    build = os.path.join(ROOT_DIR, "out", "build", "cmake")
+    install = os.path.join(ROOT_DIR, "out", "install", "cmake")
+
+    run([
+        "cmake",
+        f"-DCMAKE_INSTALL_PREFIX={install}",
+        "-DBUILD_TESTING=OFF",
+        "-B", build,
+    ], cwd=src)
+
+    run(["cmake", "--build", build, f"-j{os.cpu_count()}"])
+    run(["cmake", "--install", build])
+
+    symlink(
+        os.path.join(install, "bin", "cmake"),
+        os.path.join(ROOT_DIR, "cmake4")
+    )
+
+
+def build_ninja():
+    src = os.path.join(ROOT_DIR, "external", "ninja")
+    build = os.path.join(ROOT_DIR, "out", "build", "ninja")
+    install = os.path.join(ROOT_DIR, "out", "install", "ninja")
+
+    run([
+        "cmake",
+        f"-DCMAKE_INSTALL_PREFIX={install}",
+        "-DBUILD_TESTING=OFF",
+        "-B", build,
+    ], cwd=src)
+
+    run(["cmake", "--build", build, f"-j{os.cpu_count()}"])
+    run(["cmake", "--install", build])
+
+    symlink(
+        os.path.join(install, "bin", "ninja"),
+        os.path.join(ROOT_DIR, "ninja")
+    )
+
+
+def bootstrap():
+    build_boost()
+    build_libusb()
+    build_cmake()
+    build_ninja()
+
+
+def build_viud(enable_tidy, enable_format, build_type):
+    build = os.path.join(ROOT_DIR, "out", "build", "viu")
+    install = os.path.join(ROOT_DIR, "out", "install", "viu")
+
+    run([
+        "./cmake4",
+        f"-DCMAKE_BUILD_TYPE={build_type}",
+        "-DCMAKE_CXX_COMPILER=clang++",
+        "-DCMAKE_C_COMPILER=clang",
+        f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
+        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+        f"-DCMAKE_INSTALL_PREFIX={install}",
+        f"-DENABLE_CLANG_TIDY={enable_tidy}",
+        "-GNinja",
+        "-B", build,
+    ])
+
+    run(["./cmake4", "--build", build])
+    run(["./cmake4", "--install", build])
+
+    if enable_format == "ON":
+        print("Running clang-format...")
+        run(["./cmake4", "--build", build, "--target", "format"])
+
+    symlink(os.path.join(build, "viud"), os.path.join(ROOT_DIR, "cli"))
+    symlink(
+        os.path.join(ROOT_DIR, "src", "test", "test_device_config.json"),
+        os.path.join(ROOT_DIR, "test_device_config.json")
+    )
+
+
+def build_mouse_example(enable_tidy, build_type):
+    src = os.path.join(ROOT_DIR, "examples", "mouse")
+    build = os.path.join(ROOT_DIR, "out", "build", "examples", "mouse")
+
+    run([
+        "./cmake4",
+        f"-DCMAKE_BUILD_TYPE={build_type}",
+        "-DCMAKE_CXX_COMPILER=clang++",
+        "-DCMAKE_C_COMPILER=clang",
+        f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
+        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+        f"-DENABLE_CLANG_TIDY={enable_tidy}",
+        "-GNinja",
+        "-S", src,
+        "-B", build,
+    ])
+
+    run(["./cmake4", "--build", build])
+
+
+def build_all(enable_tidy, enable_format, build_type):
+    build_viud(enable_tidy, enable_format, build_type)
+    build_mouse_example(enable_tidy, build_type)
+
+
+def uninstall_service():
+    print("Stopping and removing viud system service...")
+
+    run(["sudo", "systemctl", "stop", "viud.service"], check=False)
+    run(["sudo", "systemctl", "disable", "viud.service"], check=False)
+
+    run(["sudo", "rm", "-f", "/etc/systemd/system/viud.service"])
+    run(["sudo", "rm", "-f", "/usr/local/bin/viud"])
+
+    run(["sudo", "systemctl", "daemon-reload"])
+    run(["sudo", "systemctl", "reset-failed"])
+
+    run(["sudo", "rm", "/tmp/viud/viud.sock"], check=False)
+
+    print("viud service removed.")
+
+def install_service():
+    uninstall_service()
+
+    print("Installing viud system service as root...")
+
+    os.makedirs("/tmp/viud", exist_ok=True)
+
+    run(["sudo", "cp", "viud.service", "/etc/systemd/system/viud.service"])
+    run(["sudo", "mkdir", "-p", "/usr/local/bin"])
+    run(["sudo", "cp", "out/build/viu/viud", "/usr/local/bin/viud"])
+    run(["sudo", "chmod", "755", "/usr/local/bin/viud"])
+
+    run(["sudo", "systemctl", "daemon-reload"])
+    run(["sudo", "systemctl", "enable", "--now", "viud.service"])
+
+    run(["systemctl", "status", "viud.service", "--no-pager"])
+
+
+def sync_usbip(tag: str) -> None:
+    import shutil
+
+    usbip_dir = os.path.join(ROOT_DIR, "external", "kernel")
+    kernel_git_url = (
+        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+    )
+
+    if not os.path.isdir(os.path.join(usbip_dir, ".git")):
+        run([
+            "git", "clone", "--filter=blob:none", "--no-checkout",
+            kernel_git_url,
+            usbip_dir
+        ])
+        run(["git", "sparse-checkout", "init", "--cone"], cwd=usbip_dir)
+        run(
+            ["git", "sparse-checkout", "set", "drivers/usb/usbip"],
+            cwd=usbip_dir
+        )
+    else:
+        run(["git", "fetch", "--tags", "--prune"], cwd=usbip_dir)
+
+    run(["git", "checkout", tag], cwd=usbip_dir)
+
+    shutil.copytree(
+        os.path.join(ROOT_DIR, "external", "usbip"),
+        os.path.join(usbip_dir, "drivers", "usb", "usbip"),
+        dirs_exist_ok=True
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="viud build & service tool")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("bootstrap", help="build third-party dependencies")
+
+    build = sub.add_parser("build", help="build viud and examples")
+    build.add_argument("--clang-tidy", default="OFF", choices=["ON", "OFF"])
+    build.add_argument("--clang-format", default="OFF", choices=["ON", "OFF"])
+    build.add_argument(
+        "--build-type",
+        default="Release",
+        choices=["Release", "Debug"]
+    )
+
+    sub.add_parser("install", help="install systemd service")
+    sub.add_parser("uninstall", help="remove systemd service")
+
+    usbip = sub.add_parser(
+        "fetch-usbip",
+        help="sync usbip subtree from Linux kernel"
+    )
+    default_kernel_tag = "v6.14"
+    usbip.add_argument(
+        "--tag",
+        default=default_kernel_tag,
+        help=f"Kernel tag or commit to sync (default: {default_kernel_tag})"
+    )
+
+    args = parser.parse_args()
+
+    if args.cmd == "bootstrap":
+        bootstrap()
+    elif args.cmd == "build":
+        print(f"clang-tidy enabled: {args.clang_tidy}")
+        print(f"clang-format enabled: {args.clang_format}")
+        build_all(args.clang_tidy, args.clang_format, args.build_type)
+    elif args.cmd == "install":
+        install_service()
+    elif args.cmd == "uninstall":
+        uninstall_service()
+    elif args.cmd == "fetch-usbip":
+        sync_usbip(args.tag)
+
+
+if __name__ == "__main__":
+    main()

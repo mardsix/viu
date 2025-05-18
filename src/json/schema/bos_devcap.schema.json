@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bLength": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "bDescriptorType": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "bDevCapabilityType": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "daDevCapability": {
+      "$ref": "types.schema.json#/$defs/daUsbBytes"
+    }
+  },
+  "required": [
+    "bLength",
+    "bDescriptorType",
+    "bDevCapabilityType",
+    "daDevCapability"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Configuration Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bLength": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDescriptorType": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "wTotalLength": {
+          "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "bNumInterfaces": {
+          "$ref": "types.schema.json#/$defs/usbByte",
+          "minimum": 1
+        },
+        "bConfigurationValue": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "iConfiguration": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bmAttributes": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "MaxPower": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "aofAltsettings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "aofInterfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "interface.schema.json"
+                }
+              }
+            },
+            "required": [
+              "aofInterfaces"
+            ]
+          }
+        }
+      },
+      "required": [
+        "bLength",
+        "bDescriptorType",
+        "wTotalLength",
+        "bNumInterfaces",
+        "bConfigurationValue",
+        "iConfiguration",
+        "bmAttributes",
+        "MaxPower",
+        "aofAltsettings"
+      ]
+    },
+    "daExtra": {
+      "$ref": "types.schema.json#/$defs/daUsbBytes"
+    }
+  },
+  "required": [
+    "Configuration Descriptor"
+  ]
+}

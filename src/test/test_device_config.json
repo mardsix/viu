@@ -1,0 +1,193 @@
+{
+  "aofDevices": [
+    {
+      "Device Descriptor": {
+        "bLength": 18,
+        "bDescriptorType": 1,
+        "bcdUSB": "0x320",
+        "bDeviceClass": 0,
+        "bDeviceSubClass": 0,
+        "bDeviceProtocol": 0,
+        "bMaxPacketSize0": 9,
+        "idVendor": "0x0000",
+        "idProduct": "0x0001",
+        "bcdDevice": "0x606",
+        "iManufacturer": 1,
+        "iProduct": 2,
+        "iSerial": 3,
+        "bNumConfigurations": 1,
+        "aofConfigurations": [
+          {
+            "Configuration Descriptor": {
+              "bLength": 9,
+              "bDescriptorType": 2,
+              "wTotalLength": "0x0044",
+              "bNumInterfaces": 1,
+              "bConfigurationValue": 1,
+              "iConfiguration": 0,
+              "bmAttributes": "0x80",
+              "MaxPower": 50,
+              "aofAltsettings": [
+                {
+                  "aofInterfaces": [
+                    {
+                      "Interface Descriptor": {
+                        "bLength": 9,
+                        "bDescriptorType": 4,
+                        "bInterfaceNumber": 0,
+                        "bAlternateSetting": 0,
+                        "bNumEndpoints": 6,
+                        "bInterfaceClass": "0xff",
+                        "bInterfaceSubClass": 66,
+                        "bInterfaceProtocol": 1,
+                        "iInterface": 0,
+                        "aofEndpoints": [
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 7,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x01",
+                              "bmAttributes": 3,
+                              "wMaxPacketSize": "0x0008",
+                              "bInterval": 10
+                            }
+                          },
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 7,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x81",
+                              "bmAttributes": 3,
+                              "wMaxPacketSize": "0x0008",
+                              "bInterval": 10
+                            }
+                          },
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 7,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x02",
+                              "bmAttributes": 5,
+                              "wMaxPacketSize": "0x0c00",
+                              "bInterval": 1
+                            }
+                          },
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 7,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x82",
+                              "bmAttributes": 5,
+                              "wMaxPacketSize": "0x0c00",
+                              "bInterval": 1
+                            }
+                          },
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 7,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x03",
+                              "bmAttributes": 2,
+                              "wMaxPacketSize": "0x0040",
+                              "bInterval": 1
+                            }
+                          },
+                          {
+                            "Endpoint Descriptor": {
+                              "bLength": 9,
+                              "bDescriptorType": 5,
+                              "bEndpointAddress": "0x83",
+                              "bmAttributes": 2,
+                              "wMaxPacketSize": "0x0040",
+                              "bInterval": 1,
+                              "bRefresh": "0x00",
+                              "bSynchAddress": "0x00"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "aofStringDescriptors": [
+        {
+          "wLanguageId": 0,
+          "aofStrings": [
+            {
+              "StringDescriptor": {
+                "bLength": 4,
+                "bDescriptorType": 3,
+                "string": ["0x09","0x04"]
+              }
+            }
+          ]
+        },
+        {
+          "wLanguageId": "0x0409",
+          "aofStrings": [
+            {
+              "StringDescriptor": {
+                "bLength": 8,
+                "bDescriptorType": 3,
+                "string": "viu"
+              }
+            },
+            {
+              "StringDescriptor": {
+                "bLength": 40,
+                "bDescriptorType": 3,
+                "string": "Virtual Test Device"
+              }
+            },
+            {
+              "StringDescriptor": {
+                "bLength": 10,
+                "bDescriptorType": 3,
+                "string": "0001"
+              }
+            }
+          ]
+        }
+      ],
+      "daReportDescriptor": [],
+      "BOS Descriptor": {
+        "bLength": 5,
+        "bDescriptorType": 15,
+        "wTotalLength": "0x0016",
+        "bNumDeviceCaps": 2,
+        "aofDeviceCaps": [
+          {
+            "bLength": 7,
+            "bDescriptorType": 16,
+            "bDevCapabilityType": 2,
+            "daDevCapability": [
+              14,
+              1,
+              0,
+              0
+            ]
+          },
+          {
+            "bLength": 10,
+            "bDescriptorType": 16,
+            "bDevCapabilityType": 3,
+            "daDevCapability": [
+              0,
+              15,
+              0,
+              1,
+              10,
+              244,
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

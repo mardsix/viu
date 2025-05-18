@@ -1,0 +1,7 @@
+/out/
+
+/cmake4
+/ninja
+/cli
+
+/test_device_config.json

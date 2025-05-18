@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "types.schema.json",
+  "$defs": {
+    "usbByte": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255
+        },
+        {
+          "type": "string",
+          "pattern": "^0[xX][0-9a-fA-F]{1,2}$"
+        }
+      ]
+    },
+    "usbWord": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        {
+          "type": "string",
+          "pattern": "^0[xX][0-9a-fA-F]{1,4}$"
+        }
+      ]
+    },
+    "daUsbBytes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/usbByte"
+      }
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "Interface Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bLength": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDescriptorType": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bInterfaceNumber": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bAlternateSetting": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bNumEndpoints": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bInterfaceClass": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bInterfaceSubClass": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bInterfaceProtocol": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "iInterface": {
+          "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "aofEndpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "endpoint.schema.json"
+          }
+        },
+        "daExtra": {
+          "$ref": "types.schema.json#/$defs/daUsbBytes"
+        }
+      },
+      "required": [
+        "bLength",
+        "bDescriptorType",
+        "bInterfaceNumber",
+        "bAlternateSetting",
+        "bNumEndpoints",
+        "bInterfaceClass",
+        "bInterfaceSubClass",
+        "bInterfaceProtocol",
+        "iInterface",
+        "aofEndpoints"
+      ]
+    }
+  },
+  "required": [
+    "Interface Descriptor"
+  ]
+}

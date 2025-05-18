@@ -1,0 +1,25 @@
+# /etc/systemd/system/viud.service
+
+[Unit]
+Description=Virtual USB Device Daemon (root)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/viud
+StandardOutput=append:/var/log/viud.log
+StandardError=append:/var/log/viud.log
+User=root
+Group=root
+Restart=on-failure
+
+# Create runtime directory under /run/viud
+RuntimeDirectory=viud
+RuntimeDirectoryMode=0755
+
+# Optional security
+NoNewPrivileges=true
+#PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

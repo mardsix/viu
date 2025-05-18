@@ -1,0 +1,31 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bLength": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "bDescriptorType": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "wTotalLength": {
+      "$ref": "types.schema.json#/$defs/usbWord"
+    },
+    "bNumDeviceCaps": {
+      "$ref": "types.schema.json#/$defs/usbByte"
+    },
+    "aofDeviceCaps": {
+      "type": "array",
+      "items": {
+        "$ref": "bos_devcap.schema.json"
+      }
+    }
+  },
+  "required": [
+    "bLength",
+    "bDescriptorType",
+    "wTotalLength",
+    "bNumDeviceCaps",
+    "aofDeviceCaps"
+  ]
+}

@@ -1,0 +1,244 @@
+module;
+
+#include <libusb.h>
+
+export module viu.usb;
+
+import std;
+
+import viu.tickable;
+import viu.transfer;
+import viu.types;
+import viu.usb.descriptors;
+
+namespace viu::usb {
+template <typename T>
+concept string_unit = std::same_as<T, std::uint8_t> ||
+                      std::same_as<T, std::uint16_t>;
+
+export struct device_id {
+    std::uint32_t vid;
+    std::uint32_t pid;
+};
+
+export class device {
+public:
+    using vector_type = usb::descriptor::vector_type;
+    using context_pointer = viu::type::unique_pointer_t<libusb_context>;
+    using device_handle_pointer =
+        viu::type::unique_pointer_t<libusb_device_handle>;
+
+    enum class error : std::uint8_t {
+        no_string_descriptor,
+        no_report_descriptor,
+        ep_get_transfer_type_failed
+    };
+
+    device() = default;
+    explicit device(std::uint32_t vid, std::uint32_t pid);
+
+    virtual ~device();
+
+    device(const device&) = delete;
+    device(device&&) = delete;
+    auto operator=(const device&) -> device& = delete;
+    auto operator=(device&&) -> device& = delete;
+
+    [[nodiscard]] virtual auto pack_device_descriptor() const -> vector_type;
+
+    [[nodiscard]] virtual auto pack_config_descriptor(std::uint8_t index) const
+        -> vector_type;
+
+    [[nodiscard]] virtual auto pack_bos_descriptor() const -> vector_type;
+    [[nodiscard]] virtual auto pack_report_descriptor() const -> vector_type;
+
+    [[nodiscard]] virtual auto pack_string_descriptor(
+        std::uint16_t language_id,
+        std::uint8_t index
+    ) const -> vector_type;
+
+    [[nodiscard]] virtual auto set_configuration(std::uint8_t index) -> int;
+    [[nodiscard]] virtual auto is_self_powered() const -> bool;
+
+    [[nodiscard]] virtual auto speed() const noexcept -> std::uint16_t
+    {
+        return device_descriptor().bcdUSB;
+    }
+
+    [[nodiscard]] virtual auto ep_transfer_type(std::uint8_t ep_address) const
+        -> std::expected<libusb_endpoint_transfer_type, error>;
+
+    auto set_interface(std::uint8_t interface, std::uint8_t alt_setting) -> int;
+
+    [[nodiscard]] auto current_altsetting(std::uint8_t interface)
+        -> std::uint8_t;
+
+    virtual void submit_bulk_transfer(const transfer::info& transfer_info);
+    virtual void submit_interrupt_transfer(const transfer::info& transfer_info);
+    virtual void submit_iso_transfer(const transfer::info& transfer_info);
+
+    [[nodiscard]] virtual auto submit_control_setup(
+        const libusb_control_setup& setup,
+        const std::vector<std::uint8_t>& data = {}
+    ) -> std::expected<std::vector<std::uint8_t>, int>;
+
+    [[nodiscard]] auto config_descriptor(
+        std::optional<std::uint8_t> index = std::nullopt
+    ) const -> usb::descriptor::config_descriptor_pointer;
+
+    [[nodiscard]] virtual auto bos_descriptor() const -> std::
+        expected<viu::usb::descriptor::bos_descriptor_pointer, libusb_error>;
+
+    [[nodiscard]] virtual auto device_descriptor() const noexcept
+        -> libusb_device_descriptor
+    {
+        return device_descriptor_;
+    }
+
+    [[nodiscard]] auto report_descriptor() const
+        -> std::expected<std::vector<std::uint8_t>, error>;
+
+    [[nodiscard]] auto string_descriptors() const
+        -> usb::descriptor::string_descriptor_map;
+
+    [[nodiscard]] virtual auto handle_events(
+        const std::chrono::milliseconds& timeout,
+        int* completed
+    ) -> int;
+
+    virtual void cancel_transfers();
+
+private:
+    [[nodiscard]] virtual auto has_valid_handle() const noexcept -> bool;
+
+    [[nodiscard]] auto open_cloned_libusb_device(libusb_device* dev) -> int;
+    [[nodiscard]] auto count_interfaces() const -> std::uint8_t;
+    [[nodiscard]] auto release_interfaces();
+    [[nodiscard]] auto claim_interfaces();
+    [[nodiscard]] auto make_list() const;
+    void close();
+    [[nodiscard]] auto make_context();
+    [[nodiscard]] auto make_handle(libusb_device* dev);
+    [[nodiscard]] auto underlying_handle() const;
+    virtual auto on_set_interface(
+        std::uint8_t interface,
+        std::uint8_t alt_setting
+    ) -> int;
+
+    template <string_unit T>
+    [[nodiscard]] auto string_descriptor(
+        std::uint16_t language_id,
+        std::uint8_t index
+    ) const -> std::expected<std::vector<T>, error>;
+
+    context_pointer libusb_context_{};
+    device_handle_pointer device_handle_{};
+    libusb_device_descriptor device_descriptor_{};
+    usb::device_id device_id_{};
+    std::map<const std::uint8_t, const std::uint8_t> alt_settings_{};
+    usb::transfer::callback cb_{};
+};
+
+static_assert(!std::copyable<device>);
+
+export class mock : public device {
+public:
+    struct interface : public viu::tickable {
+        virtual ~interface() = default;
+
+        virtual void on_transfer_request(transfer::control xfer) {};
+
+        [[nodiscard]] virtual auto on_control_setup(
+            [[maybe_unused]] const libusb_control_setup& setup,
+            [[maybe_unused]] const std::vector<std::uint8_t>& data
+        ) -> std::expected<std::vector<std::uint8_t>, int>
+        {
+            return std::unexpected{LIBUSB_ERROR_NOT_SUPPORTED};
+        }
+
+        [[nodiscard]] virtual auto on_set_configuration(
+            [[maybe_unused]] std::uint8_t index
+        ) -> int
+        {
+            return LIBUSB_ERROR_NOT_SUPPORTED;
+        }
+
+        [[nodiscard]] virtual auto on_set_interface(
+            [[maybe_unused]] std::uint8_t interface,
+            [[maybe_unused]] std::uint8_t alt_setting
+        ) -> int
+        {
+            return LIBUSB_ERROR_NOT_SUPPORTED;
+        }
+    };
+
+    explicit mock(
+        usb::descriptor::tree descriptor_tree,
+        std::shared_ptr<interface> xfer_cb
+    )
+        : descriptor_tree_{std::move(descriptor_tree)}, xfer_iface_{xfer_cb}
+    {
+    }
+
+    [[nodiscard]] auto pack_device_descriptor() const -> vector_type override;
+
+    [[nodiscard]] auto pack_config_descriptor(std::uint8_t index) const
+        -> vector_type override;
+
+    [[nodiscard]] auto pack_bos_descriptor() const -> vector_type override;
+    [[nodiscard]] auto pack_report_descriptor() const -> vector_type override;
+
+    [[nodiscard]] auto pack_string_descriptor(
+        std::uint16_t language_id,
+        std::uint8_t index
+    ) const -> vector_type override;
+
+    [[nodiscard]] auto set_configuration(std::uint8_t index) -> int override;
+    [[nodiscard]] auto is_self_powered() const -> bool override { return true; }
+
+    [[nodiscard]] auto ep_transfer_type(std::uint8_t ep_address) const
+        -> std::expected<libusb_endpoint_transfer_type, error> override;
+
+    void submit_bulk_transfer(const transfer::info& transfer_info) override;
+
+    void submit_interrupt_transfer(
+        const transfer::info& transfer_info
+    ) override;
+
+    void submit_iso_transfer(const transfer::info& transfer_info) override;
+
+    [[nodiscard]] auto submit_control_setup(
+        const libusb_control_setup& setup,
+        const std::vector<std::uint8_t>& data = {}
+    ) -> std::expected<std::vector<std::uint8_t>, int> override;
+
+    [[nodiscard]] auto device_descriptor() const noexcept
+        -> libusb_device_descriptor override
+    {
+        return descriptor_tree_.device_descriptor();
+    }
+
+    [[nodiscard]] auto handle_events(
+        const std::chrono::milliseconds& timeout,
+        [[maybe_unused]] int* completed
+    ) -> int override
+    {
+        std::this_thread::sleep_for(timeout);
+        return LIBUSB_SUCCESS;
+    }
+
+    void cancel_transfers() override;
+
+private:
+    [[nodiscard]] auto has_valid_handle() const noexcept -> bool override;
+
+    void complete_transfer(const transfer::control& usb_transfer) const;
+    auto on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
+        -> int override;
+
+    usb::descriptor::tree descriptor_tree_{};
+    std::shared_ptr<interface> xfer_iface_{};
+    usb::transfer::callback cb_{};
+};
+
+} // namespace viu::usb
