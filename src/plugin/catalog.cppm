@@ -9,8 +9,8 @@ export namespace viu::device::plugin {
 
 class catalog final : public catalog_interface {
 public:
-    auto set_name(std::string n) -> void { name_ = std::move(n); }
-    auto set_version(std::string v) -> void { version_ = std::move(v); }
+    void set_name(std::string n) { name_ = std::move(n); }
+    void set_version(std::string v) { version_ = std::move(v); }
 
     using device_factory_fn = viu::usb::mock::interface* (*)();
     auto register_device_factory(const std::string& name, device_factory_fn f)

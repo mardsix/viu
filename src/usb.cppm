@@ -108,6 +108,8 @@ public:
 
     virtual void cancel_transfers();
 
+    auto libusb_ctx() /*const*/ -> context_pointer& { return libusb_context_; }
+
 private:
     [[nodiscard]] virtual auto has_valid_handle() const noexcept -> bool;
 

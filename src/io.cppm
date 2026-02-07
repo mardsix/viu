@@ -7,7 +7,9 @@ import viu.types;
 
 export module viu.io;
 
-namespace viu::io::text::stream {
+namespace viu::io {
+
+namespace text::stream {
 
 using char_holder_type = std::int32_t;
 
@@ -33,4 +35,31 @@ export void in(std::istream& is, std::integral auto& v)
     }
 }
 
-} // namespace viu::io::text::stream
+} // namespace text::stream
+
+namespace bin::file {
+
+export template <typename T>
+bool save(const std::filesystem::path& path, const std::vector<T>& data)
+{
+    static_assert(
+        std::is_trivially_copyable_v<T>,
+        "T must be trivially copyable"
+    );
+
+    auto file = std::ofstream{path, std::ios::binary};
+    if (!file) {
+        return false;
+    }
+
+    file.write(
+        reinterpret_cast<const char*>(data.data()),
+        static_cast<std::streamsize>(data.size() * sizeof(T))
+    );
+
+    return file.good();
+}
+
+} // namespace bin::file
+
+} // namespace viu::io

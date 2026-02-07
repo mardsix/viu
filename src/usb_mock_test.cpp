@@ -61,7 +61,7 @@ struct test_device_mock final : usb::mock::interface {
         return std::chrono::milliseconds{0};
     }
 
-    auto tick() -> void override {}
+    void tick() override {}
 
 private:
     std::array<std::vector<std::uint8_t>, 15> ep_data_{};

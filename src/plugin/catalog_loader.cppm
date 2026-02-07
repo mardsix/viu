@@ -38,8 +38,7 @@ public:
 
         viu::_assert(ep != nullptr);
 
-        local_catalog_ = std::make_unique<::viu::device::plugin::catalog>();
-        catalog_iface_ = local_catalog_.get();
+        catalog_ = std::make_unique<::viu::device::plugin::catalog>();
 
         auto api = plugin_catalog_api{};
         api.ctx = this;
@@ -58,12 +57,17 @@ public:
     auto operator=(const catalog_loader&) -> catalog_loader& = delete;
     auto operator=(catalog_loader&& rhs) -> catalog_loader& = delete;
 
-    auto catalog() const -> catalog_interface* { return catalog_iface_; }
+    auto catalog() const
+        -> const std::unique_ptr<::viu::device::plugin::catalog>&
+    {
+        viu::_assert(catalog_ != nullptr);
+        return catalog_;
+    }
 
     auto device(const std::string& name)
         -> std::expected<std::shared_ptr<viu::usb::mock::interface>, error>
     {
-        return catalog_iface_->device(name);
+        return catalog()->device(name);
     }
 
 private:
@@ -72,6 +76,8 @@ private:
     void close()
     {
         if (is_open()) {
+            catalog_.reset();
+
             ::dlclose(lib_handle_);
             lib_handle_ = nullptr;
         }
@@ -79,19 +85,18 @@ private:
 
     static constexpr auto ep_symbol_ = std::string{"on_plug"};
     void* lib_handle_{};
-    std::unique_ptr<::viu::device::plugin::catalog> local_catalog_{};
-    catalog_interface* catalog_iface_{};
+    std::unique_ptr<::viu::device::plugin::catalog> catalog_{};
 
     static void api_set_name(void* ctx, const char* name)
     {
         const auto self = static_cast<catalog_loader*>(ctx);
-        self->local_catalog_->set_name(std::string{name});
+        self->catalog()->set_name(std::string{name});
     }
 
     static void api_set_version(void* ctx, const char* version)
     {
         const auto self = static_cast<catalog_loader*>(ctx);
-        self->local_catalog_->set_version(std::string{version});
+        self->catalog()->set_version(std::string{version});
     }
 
     static void api_register_device(
@@ -101,10 +106,7 @@ private:
     )
     {
         const auto self = static_cast<catalog_loader*>(ctx);
-        self->local_catalog_->register_device_factory(
-            std::string{device_name},
-            f
-        );
+        self->catalog()->register_device_factory(std::string{device_name}, f);
     }
 };
 
@@ -117,7 +119,7 @@ public:
     auto register_catalog(const std::string& name) -> catalog_interface*
     {
         plugins_.emplace(name, name);
-        return plugins_[name].catalog();
+        return plugins_[name].catalog().get();
     }
 
     auto device(const std::string& catalog_name, const std::string& device_name)

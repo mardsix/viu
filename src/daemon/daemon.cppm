@@ -5,6 +5,7 @@ import std;
 import viu.boost;
 import viu.cli;
 import viu.device.mock;
+import viu.device.proxy;
 import viu.error;
 import viu.plugin.factory;
 import viu.plugin.loader;
@@ -62,6 +63,11 @@ private:
         const std::uint32_t pid,
         const std::filesystem::path& path
     ) -> viu::response;
+    auto app_save_hid_report(
+        const std::uint32_t vid,
+        const std::uint32_t pid,
+        const std::filesystem::path& path
+    ) -> viu::response;
     auto app_mock(
         const std::filesystem::path& device_config_path,
         const std::filesystem::path& catalog_path
@@ -79,13 +85,22 @@ private:
     auto run_proxydev_command(const std::span<const char*>& args)
         -> viu::response;
     auto run_save_command(const std::span<const char*>& args) -> viu::response;
+    auto run_save_hid_report(const std::span<const char*>& args)
+        -> viu::response;
     auto run_mock_command(const std::span<const char*>& args) -> viu::response;
     auto run_version_command(const std::span<const char*>& args)
         -> viu::response;
 
+    auto check_cli_params(
+        const boost::program_options::variables_map& vm,
+        const boost::program_options::options_description& desc,
+        std::initializer_list<std::string_view> params
+    ) -> viu::result<void>;
+
     // TODO: Make them desctruction order independent
     viu::device::plugin::virtual_device_manager virtual_device_manager_{};
     std::vector<std::unique_ptr<viu::device::mock>> mock_devices_{};
+    std::vector<std::unique_ptr<viu::device::proxy>> proxy_devices_{};
     viu::tick_service tick_service_{};
 };
 

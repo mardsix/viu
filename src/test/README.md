@@ -10,23 +10,23 @@ For line by line report in text format:
 ```sh
 llvm-cov show \
     ./out/build/viu/src/test/viu-gtest \
-    -ignore-filename-regex='(external/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
+    -ignore-filename-regex='(external/.*)|(out/install/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
     -instr-profile=viu.profdata
 ```
 
 For line by line report in html format:
 ```sh
 llvm-cov show -format=html \
-    -ignore-filename-regex='(external/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
+    -ignore-filename-regex='(external/.*)|(out/install/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
     ./out/build/viu/src/test/viu-gtest \
     -instr-profile=viu.profdata > coverage.html
 ```
 
 ```sh
 llvm-cov report \
-    -ignore-filename-regex='(external/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
-    ./out/build/viu/src/test/viu-gtest \
-    -instr-profile=viu.profdata
+  -ignore-filename-regex='(external/.*)|(out/install/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
+  ./out/build/viu/src/test/viu-gtest \
+  -instr-profile=viu.profdata
 ```
 
 ## Profiling

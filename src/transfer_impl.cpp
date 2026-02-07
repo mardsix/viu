@@ -8,6 +8,7 @@ module viu.transfer;
 
 import viu.assert;
 import viu.format;
+import viu.usb;
 
 namespace viu::usb::transfer {
 
@@ -56,7 +57,7 @@ void callback::on_transfer_completed_impl(libusb_transfer* const transfer)
 
 void LIBUSB_CALL on_transfer_completed(libusb_transfer* const transfer)
 {
-    auto* self = static_cast<callback*>(transfer->user_data);
+    auto* const self = static_cast<callback*>(transfer->user_data);
     viu::_assert(self != nullptr);
     self->on_transfer_completed_impl(transfer);
 }
@@ -146,7 +147,10 @@ auto actual_length(const usb::transfer::pointer& transfer) -> std::uint32_t
     return transfer->actual_length;
 }
 
-void callback::submit(libusb_transfer* transfer)
+void callback::submit(
+    const usb::device::context_pointer& ctx,
+    libusb_transfer* transfer
+)
 {
     if (is_mock(transfer)) {
         return;
@@ -428,10 +432,10 @@ void control::attach(const callback::type& cb, callback& cbs)
     cbs.attach(cb, xfer_);
 }
 
-void control::submit(callback& cbs)
+void control::submit(const usb::device::context_pointer& ctx, callback& cbs)
 {
     viu::_assert(xfer_ != nullptr);
-    cbs.submit(xfer_);
+    cbs.submit(ctx, xfer_);
 }
 
 } // namespace viu::usb::transfer

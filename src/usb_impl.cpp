@@ -584,7 +584,7 @@ void device::submit_bulk_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_bulk(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
 }
 
 void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
@@ -592,7 +592,7 @@ void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_interrupt(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
 }
 
 void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
@@ -600,7 +600,7 @@ void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_iso(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
 }
 
 auto device::submit_control_setup(
@@ -644,7 +644,14 @@ auto device::handle_events(
     using std::chrono::duration_cast;
     const auto micros = duration_cast<std::chrono::microseconds>(timeout);
     auto tv = timeval{.tv_sec = 0, .tv_usec = micros.count()};
-    return libusb_handle_events_timeout_completed(nullptr, &tv, completed);
+
+    auto result = libusb_handle_events_timeout_completed(
+        libusb_ctx().get(),
+        &tv,
+        completed
+    );
+
+    return result;
 }
 
 void device::cancel_transfers() { cb_.cancel(); }
@@ -770,7 +777,7 @@ void mock::submit_bulk_transfer(const usb::transfer::info& transfer_info)
 {
     auto transfer_control = usb::transfer::fill_bulk(transfer_info, nullptr);
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
     complete_transfer(transfer_control);
 }
 
@@ -779,7 +786,7 @@ void mock::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_interrupt(transfer_info, nullptr);
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
     complete_transfer(transfer_control);
 }
 
@@ -787,7 +794,7 @@ void mock::submit_iso_transfer(const usb::transfer::info& transfer_info)
 {
     auto transfer_control = usb::transfer::fill_iso(transfer_info, nullptr);
     transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(cb_);
+    transfer_control.submit(libusb_ctx(), cb_);
     complete_transfer(transfer_control);
 }
 

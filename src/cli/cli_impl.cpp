@@ -9,21 +9,20 @@ namespace viu {
 auto cli::serialize_argv(int argc, const char* const argv[])
     -> std::vector<char>
 {
-    std::vector<char> buffer;
-
+    auto buffer = std::vector<char>{};
     auto append_u32 = [&](std::uint32_t v) {
-        std::uint32_t offset = buffer.size();
+        auto offset = std::size(buffer);
         buffer.resize(offset + sizeof(std::uint32_t));
         std::memcpy(buffer.data() + offset, &v, sizeof(std::uint32_t));
     };
 
     append_u32(static_cast<std::uint32_t>(argc));
 
-    for (int i = 0; i < argc; ++i) {
-        std::uint32_t len = static_cast<std::uint32_t>(std::strlen(argv[i]));
+    for (auto i = 0; i < argc; ++i) {
+        auto len = static_cast<std::uint32_t>(std::strlen(argv[i]));
         append_u32(len);
 
-        std::uint32_t offset = buffer.size();
+        auto offset = std::size(buffer);
         buffer.resize(offset + len);
         std::memcpy(buffer.data() + offset, argv[i], len);
     }
@@ -34,8 +33,7 @@ auto cli::serialize_argv(int argc, const char* const argv[])
 auto cli::deserialize_argv(const char* data, std::size_t size)
     -> cli::deserialized_args
 {
-    std::size_t offset = 0;
-
+    auto offset = std::size_t{};
     auto read_u32 = [&](std::size_t size) -> std::uint32_t {
         if (offset + sizeof(std::uint32_t) > size) {
             throw std::runtime_error("Malformed argv payload");
@@ -47,14 +45,13 @@ auto cli::deserialize_argv(const char* data, std::size_t size)
         return v;
     };
 
-    cli::deserialized_args result;
+    auto result = cli::deserialized_args{};
     result.argc = static_cast<int>(read_u32(size));
-
     result.argv_storage.reserve(result.argc + 1);
     result.string_storage.reserve(result.argc);
 
-    for (int i = 0; i < result.argc; ++i) {
-        std::uint32_t len = read_u32(size);
+    for (auto i = 0; i < result.argc; ++i) {
+        auto len = std::uint32_t{read_u32(size)};
 
         if (offset + len > size) {
             throw std::runtime_error("Malformed argv payload");

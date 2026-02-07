@@ -11,7 +11,7 @@
         "environment": [],
         "externalConsole": false,
         "MIMode": "gdb",
-        "miDebuggerPath": "${workspaceFolder}/gdb_root.sh",
+        "miDebuggerPath": "${workspaceFolder}/.vscode/.gdb_root.sh",
         "setupCommands": [
             {
                 "description": "Enable pretty-printing for gdb",

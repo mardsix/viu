@@ -105,7 +105,7 @@ def bootstrap():
     build_ninja()
 
 
-def build_viud(enable_tidy, enable_format, build_type):
+def build_viud(enable_tidy, enable_format, build_type, enable_coverage):
     build = os.path.join(ROOT_DIR, "out", "build", "viu")
     install = os.path.join(ROOT_DIR, "out", "install", "viu")
 
@@ -118,6 +118,7 @@ def build_viud(enable_tidy, enable_format, build_type):
         "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         f"-DCMAKE_INSTALL_PREFIX={install}",
         f"-DENABLE_CLANG_TIDY={enable_tidy}",
+        f"-DENABLE_COVERAGE={enable_coverage}",
         "-GNinja",
         "-B", build,
     ])
@@ -156,8 +157,8 @@ def build_mouse_example(enable_tidy, build_type):
     run(["./cmake4", "--build", build])
 
 
-def build_all(enable_tidy, enable_format, build_type):
-    build_viud(enable_tidy, enable_format, build_type)
+def build_all(enable_tidy, enable_format, build_type, enable_coverage):
+    build_viud(enable_tidy, enable_format, build_type, enable_coverage)
     build_mouse_example(enable_tidy, build_type)
 
 
@@ -240,6 +241,12 @@ def main():
         default="Release",
         choices=["Release", "Debug"]
     )
+    build.add_argument(
+        "--coverage",
+        default="OFF",
+        choices=["ON", "OFF"]
+    )
+
 
     sub.add_parser("install", help="install systemd service")
     sub.add_parser("uninstall", help="remove systemd service")
@@ -262,7 +269,13 @@ def main():
     elif args.cmd == "build":
         print(f"clang-tidy enabled: {args.clang_tidy}")
         print(f"clang-format enabled: {args.clang_format}")
-        build_all(args.clang_tidy, args.clang_format, args.build_type)
+        print(f"coverage enabled: {args.coverage}")
+        build_all(
+            args.clang_tidy,
+            args.clang_format,
+            args.build_type,
+            args.coverage
+        )
     elif args.cmd == "install":
         install_service()
     elif args.cmd == "uninstall":

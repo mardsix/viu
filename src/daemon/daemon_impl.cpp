@@ -17,6 +17,7 @@ import viu.cli;
 import viu.error;
 import viu.device.mock;
 import viu.device.proxy;
+import viu.io;
 import viu.plugin.loader;
 import viu.tickable;
 import viu.usb;
@@ -101,13 +102,35 @@ auto service::parse_command(
     return vm;
 }
 
+auto service::check_cli_params(
+    const boost::program_options::variables_map& vm,
+    const boost::program_options::options_description& desc,
+    std::initializer_list<std::string_view> params
+) -> viu::result<void>
+{
+    auto ss = std::stringstream{};
+    auto missing = false;
+    for (auto p : params) {
+        if (vm.count(std::string(p)) == 0) {
+            std::println(ss, "--{} is required", p);
+            missing = true;
+        }
+    }
+
+    if (missing) {
+        std::println(ss, "Usage:");
+        desc.print(ss);
+        return viu::make_error(error::invalid_argument, ss.str());
+    }
+
+    return {};
+}
+
 auto service::app_proxy(const std::uint32_t vid, const std::uint32_t pid)
     -> viu::response
 {
     const auto device = std::make_shared<viu::usb::device>(vid, pid);
-    [[maybe_unused]] const auto proxy_usb_device = viu::device::proxy{device};
-
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    proxy_devices_.emplace_back(std::make_unique<viu::device::proxy>(device));
 
     return viu::response::success("Proxy device created successfully");
 }
@@ -148,6 +171,28 @@ auto service::app_save_config(
     );
 }
 
+auto service::app_save_hid_report(
+    const std::uint32_t vid,
+    const std::uint32_t pid,
+    const std::filesystem::path& path
+) -> viu::response
+{
+    const auto device = std::make_shared<viu::usb::device>(vid, pid);
+    const auto proxy_usb_device = viu::device::proxy{device};
+    const auto report_desc = proxy_usb_device.report_descriptor().value_or(
+        std::vector<std::uint8_t>{}
+    );
+
+    if (!viu::io::bin::file::save(path, report_desc)) {
+        return viu::response::failure(
+            "Failed to save HID report to " + path.string(),
+            viu::make_error(error::invalid_argument, "Invalid argument").error()
+        );
+    }
+
+    return viu::response::success("HID report saved to " + path.string());
+}
+
 auto service::app_mock(
     const std::filesystem::path& device_config_path,
     const std::filesystem::path& catalog_path
@@ -161,7 +206,7 @@ auto service::app_mock(
     );
     viu::_assert(plugin_factory != nullptr);
 
-    std::stringstream ss{};
+    auto ss = std::stringstream{};
     std::println(ss, "Catalog Information:");
     std::println(ss, "  Name: {}", plugin_factory->name());
     std::println(ss, "  Version: {}", plugin_factory->version());
@@ -200,9 +245,9 @@ auto service::app_mock(
 
 auto service::app_version() -> viu::response
 {
-    std::stringstream ss{};
-    std::println(ss, "Service version: {}", viu::app_full_version);
-    std::println(ss, "Library version: {}", viu::lib_full_version);
+    auto ss = std::stringstream{};
+    std::println(ss, "Service version: {}", version::app::full());
+    std::println(ss, "Library version: {}", version::lib::full());
     return viu::response::success(ss.str());
 }
 
@@ -223,19 +268,15 @@ auto service::run_proxydev_command(const std::span<const char*>& args)
     // clang-format on
     const auto vm = parse_command(args, desc);
     if (vm.count("help")) {
-        std::stringstream ss{};
+        auto ss = std::stringstream{};
         desc.print(ss);
         return viu::response::success(ss.str());
     }
 
-    if (vm.count("device") == 0) {
-        std::stringstream ss{};
-        std::println(ss, "Device id is required");
-        desc.print(ss);
-
+    if (auto res = check_cli_params(vm, desc, {"device"}); !res) {
         return viu::response::failure(
-            ss.str(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
+            std::string(res.error().message()),
+            res.error()
         );
     }
 
@@ -266,33 +307,58 @@ auto service::run_save_command(const std::span<const char*>& args)
 
     const auto vm = parse_command(args, desc);
     if (vm.count("help")) {
-        std::stringstream ss{};
+        auto ss = std::stringstream{};
         desc.print(ss);
         return viu::response::success(ss.str());
     }
 
-    if (vm.count("device") == 0) {
-        std::stringstream ss{};
-        std::println(ss, "Device id is required");
-        desc.print(ss);
-
+    if (auto res = check_cli_params(vm, desc, {"device", "file"}); !res) {
         return viu::response::failure(
-            ss.str(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
-        );
-    }
-
-    if (vm.count("file") == 0) {
-        std::stringstream ss{};
-        std::println(ss, "Configuration file path is required");
-        desc.print(ss);
-        return viu::response::failure(
-            ss.str(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
+            std::string(res.error().message()),
+            res.error()
         );
     }
 
     return app_save_config(device.vid(), device.pid(), path);
+}
+
+auto service::run_save_hid_report(const std::span<const char*>& args)
+    -> viu::response
+{
+    namespace po = boost::program_options;
+    auto desc = po::options_description{"Save HID report to file"};
+    auto device = ::viu::daemon::args::device_id{};
+    auto path = std::filesystem::path{};
+    // clang-format off
+    desc.add_options()
+    ("help,h", "Show this message")
+    (
+       "device,d",
+       po::value<::viu::daemon::args::device_id>(&device),
+       "Device id as vid:pid"
+    )
+    (
+        "file,f",
+        po::value<std::filesystem::path>(&path),
+        "HID report path"
+    );
+    // clang-format on
+
+    const auto vm = parse_command(args, desc);
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
+        desc.print(ss);
+        return viu::response::success(ss.str());
+    }
+
+    if (auto res = check_cli_params(vm, desc, {"device", "file"}); !res) {
+        return viu::response::failure(
+            std::string(res.error().message()),
+            res.error()
+        );
+    }
+
+    return app_save_hid_report(device.vid(), device.pid(), path);
 }
 
 auto service::run_mock_command(const std::span<const char*>& args)
@@ -318,29 +384,16 @@ auto service::run_mock_command(const std::span<const char*>& args)
     // clang-format on
 
     const auto vm = parse_command(args, desc);
-    if (vm.count("help") != 0) {
-        std::stringstream ss{};
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
         desc.print(ss);
         return viu::response::success(ss.str());
     }
 
-    if (vm.count("config") == 0) {
-        std::stringstream ss{};
-        std::println(ss, "Device configuration path is required");
-        desc.print(ss);
+    if (auto res = check_cli_params(vm, desc, {"config", "catalog"}); !res) {
         return viu::response::failure(
-            ss.str(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
-        );
-    }
-
-    if (vm.count("catalog") == 0) {
-        std::stringstream ss{};
-        std::println(ss, "Catalog path is required");
-        desc.print(ss);
-        return viu::response::failure(
-            ss.str(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
+            std::string(res.error().message()),
+            res.error()
         );
     }
 
@@ -368,6 +421,10 @@ auto service::execute_from_argv(int argc, const char* argv[]) -> viu::response
          [this](const std::span<const char*>& args) {
              return run_save_command(args);
          }},
+        {"save-hid-report",
+         [this](const std::span<const char*>& args) {
+             return run_save_hid_report(args);
+         }},
         {"mock",
          [this](const std::span<const char*>& args) {
              return run_mock_command(args);
@@ -383,23 +440,33 @@ auto service::execute_from_argv(int argc, const char* argv[]) -> viu::response
         return func->second(
             std::span{&argv[1], static_cast<std::size_t>(argc - 1)}
         );
-    } else {
-        auto desc = po::options_description{"virtual USB device toybox"};
-        desc.add_options()("help", "show this message");
-
-        auto vm = parse_command(arguments, desc);
-        if (vm.count("help") || vm.count("device") == 0) {
-            std::stringstream ss{};
-            desc.print(ss);
-            std::println(ss, "List of subcommands:");
-            for (auto& p : subcommands) {
-                std::println(ss, "  {}", p.first);
-            }
-            return viu::response::success(ss.str());
-        }
     }
 
-    return viu::response::success("Command executed successfully");
+    auto desc = po::options_description{"Virtual USB device CLI"};
+    desc.add_options()("help", "Show this message");
+
+    auto vm = parse_command(arguments, desc);
+    auto ss = std::stringstream{};
+
+    const auto print_usage = [&]() {
+        desc.print(ss);
+        std::println(ss, "List of subcommands:");
+        for (auto& p : subcommands) {
+            std::println(ss, "  {}", p.first);
+        }
+    };
+
+    if (vm.count("help")) {
+        print_usage();
+        return viu::response::success(ss.str());
+    }
+
+    std::println(ss, "Invalid or no subcommand provided\nUsage:");
+    print_usage();
+    return viu::response::failure(
+        ss.str(),
+        viu::make_error(error::invalid_argument, "Invalid argument").error()
+    );
 }
 
 void service::handle_accept(

@@ -16,18 +16,6 @@ import viu.usb.descriptors;
 
 using viu::device::basic;
 
-basic::basic()
-{
-    command_produce_thread();
-    reply_consume_thread();
-
-    for (std::size_t ep = 0; ep < std::size(in_commands_); ++ep) {
-        transfer_thread(ep);
-    }
-
-    command_execution_thread();
-}
-
 basic::~basic()
 {
     commands_queue_.close();
@@ -146,6 +134,22 @@ void basic::command_execution_thread()
     threads_.emplace_back(func);
 }
 
+void basic::start()
+{
+    if (!threads_.empty()) {
+        return;
+    }
+
+    command_produce_thread();
+    reply_consume_thread();
+
+    for (std::size_t ep = 0; ep < std::size(in_commands_); ++ep) {
+        transfer_thread(ep);
+    }
+
+    command_execution_thread();
+}
+
 auto basic::read_command() -> usbip::command
 {
     constexpr auto hdr_size = usbip::command::header_size();
@@ -249,19 +253,25 @@ void basic::unlink_command(const usbip::command& cmd)
             status = -ECONNRESET;
         }
     }
-    queue_reply_to_host(cmd, nullptr, 0, status);
+
+    basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = nullptr;
+    req.size = 0;
+    req.status = status;
+    queue_reply_to_host(req);
 }
 
-void basic::queue_reply_to_host(
-    const usbip::command& cmd,
-    const void* data,
-    const std::size_t size,
-    const std::int32_t status,
-    const std::size_t iso_descriptor_size,
-    const std::int32_t error_count
-)
+void basic::queue_reply_to_host(const queue_reply_request& req)
 {
-    usbip::command replay;
+    const auto& cmd = req.cmd;
+    const auto data = req.data;
+    const auto size = req.size;
+    const auto status = req.status;
+    const auto iso_descriptor_size = req.iso_descriptor_size;
+    const auto error_count = req.error_count;
+
+    auto replay = usbip::command{};
     replay.header().base = cmd.reply_header();
     switch (cmd.request()) {
         case USBIP_CMD_SUBMIT: {
@@ -302,14 +312,14 @@ void basic::send_data_to_host(const std::uint32_t ep)
     const auto data_size = data.buffer.size() - data.iso_descriptor_size;
     viu::_assert(data_size <= cmd.transfer_buffer_size());
 
-    queue_reply_to_host(
-        cmd,
-        data.buffer.data(),
-        data_size,
-        0,
-        data.iso_descriptor_size,
-        data.error_count
-    );
+    basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = data.buffer.data();
+    req.size = data_size;
+    req.status = 0;
+    req.iso_descriptor_size = data.iso_descriptor_size;
+    req.error_count = data.error_count;
+    queue_reply_to_host(req);
 }
 
 void basic::queue_data_for_host(const usb::transfer::pointer& transfer)

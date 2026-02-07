@@ -6,6 +6,7 @@ export module viu.transfer;
 
 import std;
 
+import viu.types;
 import viu.usb.descriptors;
 
 namespace viu::usb::transfer {
@@ -19,7 +20,10 @@ export struct callback {
     using context_type = void*;
 
     void attach(const type& cb, libusb_transfer* const transfer);
-    void submit(libusb_transfer* transfer);
+    void submit(
+        const viu::type::unique_pointer_t<libusb_context>& ctx,
+        libusb_transfer* transfer
+    );
     void cancel();
     void on_transfer_completed_impl(libusb_transfer* transfer);
 
@@ -84,7 +88,10 @@ export struct control {
     [[nodiscard]] auto type() const;
     [[nodiscard]] auto ep() const -> std::uint8_t;
     void attach(const callback::type& cb, callback& cbs);
-    void submit(callback& cbs);
+    void submit(
+        const viu::type::unique_pointer_t<libusb_context>& ctx,
+        callback& cbs
+    );
 
 private:
     static constexpr std::uint8_t direction_mask = 1 << 7;

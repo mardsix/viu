@@ -30,15 +30,25 @@ else()
     message(STATUS "Clang-tidy disabled")
 endif()
 
-target_compile_options(${TEST_EXECUTABLE_NAME}
-    PRIVATE
-    -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping
-)
+option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 
-target_link_options(${TEST_EXECUTABLE_NAME}
-    PRIVATE
-    -fprofile-arcs -fprofile-instr-generate
-)
+if (ENABLE_COVERAGE)
+    message(STATUS "Coverage instrumentation enabled for tests")
+
+    target_compile_options(${TEST_EXECUTABLE_NAME}
+        PRIVATE
+            -fprofile-arcs
+            -ftest-coverage
+            -fprofile-instr-generate
+            -fcoverage-mapping
+    )
+
+    target_link_options(${TEST_EXECUTABLE_NAME}
+        PRIVATE
+            -fprofile-arcs
+            -fprofile-instr-generate
+    )
+endif()
 
 add_compile_options(-Wall -Wpedantic)
 add_compile_options(-Wno-zero-length-array -Wno-c99-extensions)
@@ -93,10 +103,10 @@ target_sources(${TEST_EXECUTABLE_NAME}
 target_sources(${TEST_EXECUTABLE_NAME}
     PRIVATE
     ${VIU_TOP_SOURCE_DIR}/src/assert_impl.cpp
+    ${VIU_TOP_SOURCE_DIR}/src/descriptors/usb_descriptors_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/json/json_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/transfer_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_basic_impl.cpp
-    ${VIU_TOP_SOURCE_DIR}/src/usb_descriptors_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_device_proxy_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_mock_impl.cpp
@@ -138,3 +148,5 @@ target_link_libraries(
 
 include(GoogleTest)
 gtest_discover_tests(${TEST_EXECUTABLE_NAME})
+
+#enable_sanitizers(${TEST_EXECUTABLE_NAME} tsan)

@@ -35,11 +35,14 @@ using viu::device::proxy;
 
 proxy::proxy(const std::shared_ptr<usb::device>& device) : usb_device_{device}
 {
+    start();
+
     device_thread_ = std::jthread{[this](const std::stop_token& stoken) {
+        std::atomic<bool> stop{false};
         auto completed = int{0};
 
-        const auto usb_event_handler = [this, &completed]() {
-            while (completed == 0) {
+        const auto usb_event_handler = [&, this]() {
+            while (!stop.load(std::memory_order_acquire)) {
                 auto result = usb_device_->handle_events(
                     std::chrono::milliseconds{100},
                     &completed
@@ -58,7 +61,11 @@ proxy::proxy(const std::shared_ptr<usb::device>& device) : usb_device_{device}
 
         usb_device_->cancel_transfers();
 
+        stop.store(true, std::memory_order_release);
         completed = 1;
+        if (usb_device_->libusb_ctx() != nullptr) {
+            libusb_interrupt_event_handler(usb_device_->libusb_ctx().get());
+        }
         event_handler_thread.join();
     }};
 }
@@ -129,7 +136,12 @@ void proxy::descriptor(const usbip::command& cmd)
                     )
                 );
 
-                queue_reply_to_host(cmd, nullptr, 0, data.error());
+                viu::device::basic::queue_reply_request req{};
+                req.cmd = cmd;
+                req.data = nullptr;
+                req.size = 0;
+                req.status = data.error();
+                queue_reply_to_host(req);
                 return;
             }
 
@@ -141,7 +153,12 @@ void proxy::descriptor(const usbip::command& cmd)
     const auto reply_length =
         std::min(descriptor_data.size(), std::size_t{control_setup.wLength});
 
-    queue_reply_to_host(cmd, descriptor_data.data(), reply_length, status);
+    viu::device::basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = descriptor_data.data();
+    req.size = reply_length;
+    req.status = status;
+    queue_reply_to_host(req);
 }
 
 void proxy::on_out_iso_transfer_complete(
@@ -153,14 +170,14 @@ void proxy::on_out_iso_transfer_complete(
 
     const auto iso_desc = usb::transfer::iso_descriptors(transfer);
 
-    queue_reply_to_host(
-        cmd,
-        iso_desc.descriptors.data(),
-        iso_desc.data_size,
-        0,
-        usb::transfer::iso_descriptor_size(transfer),
-        iso_desc.error_count
-    );
+    viu::device::basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = iso_desc.descriptors.data();
+    req.size = iso_desc.data_size;
+    req.status = 0;
+    req.iso_descriptor_size = usb::transfer::iso_descriptor_size(transfer);
+    req.error_count = iso_desc.error_count;
+    queue_reply_to_host(req);
 }
 
 void proxy::on_in_iso_transfer_complete(const usb::transfer::pointer& transfer)
@@ -187,7 +204,12 @@ void proxy::on_out_transfer_complete(
 {
     viu::_assert(transfer != nullptr);
     viu::_assert(transfer->actual_length == transfer->length);
-    queue_reply_to_host(cmd, nullptr, transfer->actual_length);
+
+    viu::device::basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = nullptr;
+    req.size = transfer->actual_length;
+    queue_reply_to_host(req);
 }
 
 void proxy::send_data_to_device(const usbip::command& cmd)
@@ -331,12 +353,13 @@ void proxy::execute_in_control_command(const usbip::command& cmd)
     const auto submit_ctrl_setup = [&]() {
         const auto control_setup = cmd.control_setup();
         const auto data = usb_device_->submit_control_setup(control_setup);
-        queue_reply_to_host(
-            cmd,
-            data.has_value() ? data->data() : nullptr,
-            data.has_value() ? std::size(*data) : 0,
-            data.has_value() ? 0 : data.error()
-        );
+
+        viu::device::basic::queue_reply_request req{};
+        req.cmd = cmd;
+        req.data = data.has_value() ? data->data() : nullptr;
+        req.size = data.has_value() ? std::size(*data) : 0;
+        req.status = data.has_value() ? 0 : data.error();
+        queue_reply_to_host(req);
     };
 
     if (cmd.request_type() != LIBUSB_REQUEST_TYPE_STANDARD) {
@@ -365,7 +388,11 @@ void proxy::execute_std_in_device_control_command(const usbip::command& cmd)
     switch (control_setup.bRequest) {
         case LIBUSB_REQUEST_GET_STATUS: {
             const std::uint16_t reply = usb_device_->is_self_powered() ? 1 : 0;
-            queue_reply_to_host(cmd, &reply, sizeof(reply));
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = &reply;
+            req.size = sizeof(reply);
+            queue_reply_to_host(req);
             break;
         }
 
@@ -375,12 +402,12 @@ void proxy::execute_std_in_device_control_command(const usbip::command& cmd)
 
         default: {
             const auto data = usb_device_->submit_control_setup(control_setup);
-            queue_reply_to_host(
-                cmd,
-                data.has_value() ? data->data() : nullptr,
-                data.has_value() ? std::size(*data) : 0,
-                data.has_value() ? 0 : data.error()
-            );
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = data.has_value() ? data->data() : nullptr;
+            req.size = data.has_value() ? std::size(*data) : 0;
+            req.status = data.has_value() ? 0 : data.error();
+            queue_reply_to_host(req);
         } break;
     }
 }
@@ -395,12 +422,12 @@ void proxy::execute_std_in_interface_control_command(const usbip::command& cmd)
 
         default: {
             const auto data = usb_device_->submit_control_setup(control_setup);
-            queue_reply_to_host(
-                cmd,
-                data.has_value() ? data->data() : nullptr,
-                data.has_value() ? std::size(*data) : 0,
-                data.has_value() ? 0 : data.error()
-            );
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = data.has_value() ? data->data() : nullptr;
+            req.size = data.has_value() ? std::size(*data) : 0;
+            req.status = data.has_value() ? 0 : data.error();
+            queue_reply_to_host(req);
         } break;
     }
 }
@@ -409,7 +436,11 @@ void proxy::set_configuration(const usbip::command& cmd)
 {
     auto result = usb_device_->set_configuration(cmd.config_index());
     viu::_assert(result == LIBUSB_SUCCESS);
-    queue_reply_to_host(cmd, nullptr, cmd.transfer_buffer_size());
+    viu::device::basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = nullptr;
+    req.size = cmd.transfer_buffer_size();
+    queue_reply_to_host(req);
 }
 
 void proxy::interface(const usbip::command& cmd)
@@ -418,7 +449,12 @@ void proxy::interface(const usbip::command& cmd)
     const auto alt_setting = usb_device_->current_altsetting(
         format::integral<std::uint8_t>::at<0>(control_setup.wIndex)
     );
-    queue_reply_to_host(cmd, &alt_setting, sizeof(alt_setting));
+
+    viu::device::basic::queue_reply_request req{};
+    req.cmd = cmd;
+    req.data = &alt_setting;
+    req.size = sizeof(alt_setting);
+    queue_reply_to_host(req);
 }
 
 void proxy::execute_out_control_command(const usbip::command& cmd)
@@ -427,12 +463,12 @@ void proxy::execute_out_control_command(const usbip::command& cmd)
         const auto control_setup = cmd.control_setup();
         const auto data =
             usb_device_->submit_control_setup(control_setup, cmd.payload());
-        queue_reply_to_host(
-            cmd,
-            nullptr,
-            control_setup.wLength,
-            data.has_value() ? 0 : data.error()
-        );
+        viu::device::basic::queue_reply_request req{};
+        req.cmd = cmd;
+        req.data = nullptr;
+        req.size = control_setup.wLength;
+        req.status = data.has_value() ? 0 : data.error();
+        queue_reply_to_host(req);
     };
 
     if (cmd.request_type() != LIBUSB_REQUEST_TYPE_STANDARD) {
@@ -462,19 +498,25 @@ void proxy::execute_std_out_device_control_command(const usbip::command& cmd)
             set_configuration(cmd);
             break;
 
-        case libusb_standard_request::LIBUSB_SET_ISOCH_DELAY:
-            queue_reply_to_host(cmd, nullptr, 0);
-            break;
+        case libusb_standard_request::LIBUSB_SET_ISOCH_DELAY: {
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = nullptr;
+            req.size = 0;
+            queue_reply_to_host(req);
+        } break;
 
         default: {
             const auto data =
                 usb_device_->submit_control_setup(control_setup, cmd.payload());
-            queue_reply_to_host(
-                cmd,
-                nullptr,
-                control_setup.wLength,
-                data.has_value() ? 0 : data.error()
-            );
+
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = nullptr;
+            req.size = control_setup.wLength;
+            req.status = data.has_value() ? 0 : data.error();
+            queue_reply_to_host(req);
+
         } break;
     }
 }
@@ -497,18 +539,22 @@ void proxy::execute_std_out_interface_control_command(const usbip::command& cmd)
             const auto result =
                 usb_device_->set_interface(interface, alt_setting);
             viu::_assert(result == LIBUSB_SUCCESS);
-            queue_reply_to_host(cmd, nullptr, control_setup.wLength);
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = nullptr;
+            req.size = control_setup.wLength;
+            queue_reply_to_host(req);
         } break;
 
         default: {
             const auto data =
                 usb_device_->submit_control_setup(control_setup, cmd.payload());
-            queue_reply_to_host(
-                cmd,
-                nullptr,
-                control_setup.wLength,
-                data.has_value() ? 0 : data.error()
-            );
+            viu::device::basic::queue_reply_request req{};
+            req.cmd = cmd;
+            req.data = nullptr;
+            req.size = control_setup.wLength;
+            req.status = data.has_value() ? 0 : data.error();
+            queue_reply_to_host(req);
         } break;
     }
 }

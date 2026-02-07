@@ -11,14 +11,21 @@ set(CMAKE_CXX_MODULE_STD ON)
 
 set(
     CMAKE_CXX_FLAGS_DEBUG
-    "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -gdwarf-4"
+    "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -gdwarf-4 -DVIU_ASSERT_ABORT"
 )
 
 set(DAEMON_NAME ${PROJECT_NAME}d)
 set(LIB_NAME ${PROJECT_NAME})
 
-set(APP_VERSION "v0.1.0-alpha")
-set(LIB_VERSION "v0.1.0-alpha")
+set(APP_MAJOR_VERSION 0)
+set(APP_MINOR_VERSION 1)
+set(APP_PATCH_VERSION 1)
+set(APP_PRE_RELEASE_VERSION "alpha")
+
+set(LIB_MAJOR_VERSION 0)
+set(LIB_MINOR_VERSION 1)
+set(LIB_PATCH_VERSION 1)
+set(LIB_PRE_RELEASE_VERSION "alpha")
 
 find_package(Git QUIET)
 
@@ -33,8 +40,6 @@ else()
     set(GIT_SHA "unknown")
 endif()
 
-set(GIT_DIRTY "")
-
 if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
     execute_process(
         COMMAND ${GIT_EXECUTABLE} status --porcelain
@@ -44,12 +49,11 @@ if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
     )
 
     if(NOT GIT_STATUS STREQUAL "")
-        set(GIT_DIRTY "-dirty")
+        set(GIT_DIRTY ".dirty")
     endif()
 endif()
 
-set(APP_FULL_VERSION "${APP_VERSION}-${GIT_SHA}${GIT_DIRTY}")
-set(LIB_FULL_VERSION "${LIB_VERSION}-${GIT_SHA}${GIT_DIRTY}")
+set(GIT_COMMIT ${GIT_SHA}${GIT_DIRTY})
 
 configure_file(
     ${CMAKE_SOURCE_DIR}/src/version.cppm.in
@@ -165,10 +169,10 @@ set(VIU_MODULES
 target_sources(${LIB_NAME}
     PRIVATE
     src/assert_impl.cpp
+    src/descriptors/usb_descriptors_impl.cpp
     src/json/json_impl.cpp
     src/transfer_impl.cpp
     src/usb_basic_impl.cpp
-    src/usb_descriptors_impl.cpp
     src/usb_device_proxy_impl.cpp
     src/usb_impl.cpp
     src/usb_mock_impl.cpp
@@ -289,4 +293,4 @@ target_link_libraries(
 
 add_subdirectory(src/test)
 
-enable_sanitizers(${DAEMON_NAME} tsan)
+#enable_sanitizers(${DAEMON_NAME} tsan)

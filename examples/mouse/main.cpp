@@ -1,3 +1,11 @@
+// device.config contains a sample USB mouse device descriptor.
+//
+// To run this example using a USB mouse descriptor from a device
+// connected to your machine, execute:
+//
+//   ./cli save -d <vid>:<pid> -f $(pwd)/hid.cfg
+//   ./cli mock -c $(pwd)/hid.cfg -m $(pwd)/out/build/examples/mouse/libmm.so
+
 #include "libusb.h"
 
 import std;
@@ -99,12 +107,19 @@ void on_plug(viu::device::plugin::plugin_catalog_api* api)
     api->set_name(api->ctx, "HID Devices");
     api->set_version(api->ctx, "1.0.0-beta");
 
-    api->register_device(api->ctx, "mouse", []() -> viu::usb::mock::interface* {
+    const auto factory = []() -> viu::usb::mock::interface* {
         try {
             return new app::mouse_mock();
         } catch (...) {
             return nullptr;
         }
-    });
+    };
+
+    api->register_device(api->ctx, "mouse-1", factory);
+
+    // You can register multiple mock devices, including additional instances
+    // of the same type or entirely different devices.
+    // Example: register a second mouse device:
+    // api->register_device(api->ctx, "mouse-2", factory);
 }
 }
