@@ -2,7 +2,7 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "a9e1cf81-9932-4810-974b-6eccaf14e457")
 
 cmake_minimum_required(VERSION 4.0)
 
-project(mm)
+project(viumouse)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -13,8 +13,11 @@ set(
     "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -gdwarf-4"
 )
 
-set(EXECUTABLE_NAME ${PROJECT_NAME})
-add_library(${EXECUTABLE_NAME} SHARED)
+set(MOCK_LIB_NAME ${PROJECT_NAME}-mock)
+set(PROXY_LIB_NAME ${PROJECT_NAME}-proxy)
+
+add_library(${MOCK_LIB_NAME} SHARED)
+add_library(${PROXY_LIB_NAME} SHARED)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 
@@ -35,11 +38,27 @@ else()
     message(STATUS "Clang-tidy disabled")
 endif()
 
+find_program(CLANG_FORMAT_EXE NAMES "clang-format")
+if(CLANG_FORMAT_EXE)
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT_EXE}
+            -i
+            -style=file
+            ${PROJECT_SOURCE_DIR}/*.cpp
+        COMMENT "Formatting source files"
+    )
+endif()
+
 add_compile_options(-Wall -Wpedantic)
 
-target_sources(${EXECUTABLE_NAME}
+target_sources(${MOCK_LIB_NAME}
     PRIVATE
-    main.cpp
+    mock.cpp
+)
+
+target_sources(${PROXY_LIB_NAME}
+    PRIVATE
+    proxy.cpp
 )
 
 set(BOOST_ROOT ${CMAKE_SOURCE_DIR}/../../out/install/boost)
@@ -53,6 +72,11 @@ include_directories(
 )
 
 target_link_libraries(
-    ${EXECUTABLE_NAME}
+    ${MOCK_LIB_NAME}
+    PRIVATE viu::viu
+)
+
+target_link_libraries(
+    ${PROXY_LIB_NAME}
     PRIVATE viu::viu
 )

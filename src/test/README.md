@@ -24,9 +24,9 @@ llvm-cov show -format=html \
 
 ```sh
 llvm-cov report \
-  -ignore-filename-regex='(external/.*)|(out/install/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
-  ./out/build/viu/src/test/viu-gtest \
-  -instr-profile=viu.profdata
+    -ignore-filename-regex='(external/.*)|(out/install/.*)|(src/test/.*)|(src/.*_test\.cpp)' \
+    ./out/build/viu/src/test/viu-gtest \
+    -instr-profile=viu.profdata
 ```
 
 ## Profiling

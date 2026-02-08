@@ -62,9 +62,14 @@ auto device::make_context()
     );
 }
 
-device::device(std::uint32_t vid, std::uint32_t pid)
+device::device(
+    std::uint32_t vid,
+    std::uint32_t pid,
+    std::shared_ptr<device::interface> xfer_iface
+)
     : device_id_{.vid = vid, .pid = pid}
 {
+    xfer_iface_ = xfer_iface;
     auto [context, libusb_result] = make_context();
 
     if (libusb_result == LIBUSB_SUCCESS) {
@@ -269,6 +274,11 @@ auto device::pack_device_descriptor() const -> vector_type
 
 auto device::set_configuration(std::uint8_t index) -> int
 {
+    if (xfer_iface_ != nullptr) {
+        [[maybe_unused]] const auto iface_res =
+            xfer_iface_->on_set_configuration(index);
+    }
+
     auto current_index = int{-1};
     auto result = libusb_get_configuration(underlying_handle(), &current_index);
     viu::_assert(result == LIBUSB_SUCCESS);
@@ -546,6 +556,12 @@ auto device::on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
     -> int
 {
     viu::_assert(has_valid_handle());
+
+    if (xfer_iface_ != nullptr) {
+        [[maybe_unused]] const auto iface_res =
+            xfer_iface_->on_set_interface(interface, alt_setting);
+    }
+
     return libusb_set_interface_alt_setting(
         underlying_handle(),
         interface,
@@ -584,6 +600,11 @@ void device::submit_bulk_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_bulk(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
+
+    if (xfer_iface_ != nullptr) {
+        xfer_iface_->on_transfer_request(transfer_control);
+    }
+
     transfer_control.submit(libusb_ctx(), cb_);
 }
 
@@ -592,6 +613,11 @@ void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_interrupt(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
+
+    if (xfer_iface_ != nullptr) {
+        xfer_iface_->on_transfer_request(transfer_control);
+    }
+
     transfer_control.submit(libusb_ctx(), cb_);
 }
 
@@ -600,6 +626,11 @@ void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
     auto transfer_control =
         usb::transfer::fill_iso(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
+
+    if (xfer_iface_ != nullptr) {
+        xfer_iface_->on_transfer_request(transfer_control);
+    }
+
     transfer_control.submit(libusb_ctx(), cb_);
 }
 
@@ -616,6 +647,11 @@ auto device::submit_control_setup(
     }
 
     setup_data.resize(setup.wLength);
+
+    if (xfer_iface_ != nullptr) {
+        [[maybe_unused]] const auto iface_result =
+            xfer_iface_->on_control_setup(setup, setup_data);
+    }
 
     const auto result = libusb_control_transfer(
         underlying_handle(),

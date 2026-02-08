@@ -56,8 +56,11 @@ private:
         const std::span<const char*>& args,
         const boost::program_options::options_description& desc
     ) -> boost::program_options::variables_map;
-    auto app_proxy(const std::uint32_t vid, const std::uint32_t pid)
-        -> viu::response;
+    auto app_proxy(
+        const std::uint32_t vid,
+        const std::uint32_t pid,
+        const std::filesystem::path& catalog_path
+    ) -> viu::response;
     auto app_save_config(
         const std::uint32_t vid,
         const std::uint32_t pid,

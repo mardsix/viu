@@ -4,7 +4,8 @@
 // connected to your machine, execute:
 //
 //   ./cli save -d <vid>:<pid> -f $(pwd)/hid.cfg
-//   ./cli mock -c $(pwd)/hid.cfg -m $(pwd)/out/build/examples/mouse/libmm.so
+//   ./cli mock -c $(pwd)/hid.cfg \
+//       -m $(pwd)/out/build/examples/mouse/libviumouse-mock.so
 
 #include "libusb.h"
 

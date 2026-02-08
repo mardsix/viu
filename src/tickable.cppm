@@ -7,8 +7,9 @@ import viu.boost;
 namespace viu {
 
 export struct tickable {
-    [[nodiscard]] virtual auto interval() const
-        -> std::chrono::milliseconds = 0;
+    virtual ~tickable() = default;
+
+    virtual auto interval() const -> std::chrono::milliseconds = 0;
     virtual void tick() = 0;
 };
 
@@ -59,6 +60,10 @@ private:
                     }
 
                     const auto interval = tickable_obj->interval();
+                    if (interval.count() == 0) {
+                        continue;
+                    }
+
                     const auto now = std::chrono::steady_clock::now();
                     const auto last_tick = last_tick_time_[tickable_obj.get()];
                     const auto elapsed =

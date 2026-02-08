@@ -13,7 +13,7 @@ import viu.vhci;
 
 namespace viu::device {
 
-export class proxy final : private basic {
+export class proxy : private basic {
 public:
     proxy() = default;
     explicit proxy(const std::shared_ptr<usb::device>& device);

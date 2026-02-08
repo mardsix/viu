@@ -109,7 +109,6 @@ target_sources(${TEST_EXECUTABLE_NAME}
     ${VIU_TOP_SOURCE_DIR}/src/usb_basic_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_device_proxy_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usb_impl.cpp
-    ${VIU_TOP_SOURCE_DIR}/src/usb_mock_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/usbip_socket_impl.cpp
     ${VIU_TOP_SOURCE_DIR}/src/vhci_impl.cpp
 

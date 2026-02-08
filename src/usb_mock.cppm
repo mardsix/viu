@@ -8,24 +8,15 @@ import viu.usb.descriptors;
 
 namespace viu::device {
 
-export class mock {
+export class mock : public proxy {
 public:
     mock(
         usb::descriptor::tree descriptor_tree,
         std::shared_ptr<usb::mock::interface> xfer_iface
-    );
-
-    ~mock();
-
-    mock(const mock&) = delete;
-    mock(mock&&) = delete;
-    auto operator=(const mock&) -> mock& = delete;
-    auto operator=(mock&&) -> mock& = delete;
-
-private:
-    std::shared_ptr<usb::mock> device_{};
-    proxy proxy_{};
-    std::jthread device_thread_{};
+    )
+        : proxy{std::make_shared<viu::usb::mock>(descriptor_tree, xfer_iface)}
+    {
+    }
 };
 
 static_assert(!std::copyable<mock>);

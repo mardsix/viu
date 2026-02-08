@@ -6,10 +6,11 @@ namespace viu::version {
 
 template <typename T>
 concept version_info = requires {
-    { T::major } -> std::convertible_to<std::string_view>;
-    { T::minor } -> std::convertible_to<std::string_view>;
-    { T::patch } -> std::convertible_to<std::string_view>;
+    { T::major } -> std::convertible_to<std::uint32_t>;
+    { T::minor } -> std::convertible_to<std::uint32_t>;
+    { T::patch } -> std::convertible_to<std::uint32_t>;
     { T::pre_release } -> std::convertible_to<std::string_view>;
+    { T::git_commit } -> std::convertible_to<std::string_view>;
 };
 
 template <version_info T>
@@ -17,9 +18,11 @@ std::string make_full()
 {
     std::string version;
 
-    version.append(T::major).append(".").append(T::minor).append(".").append(
-        T::patch
-    );
+    version.append(std::to_string(T::major))
+        .append(".")
+        .append(std::to_string(T::minor))
+        .append(".")
+        .append(std::to_string(T::patch));
 
     if (!T::pre_release.empty()) {
         version.append("-").append(T::pre_release);
@@ -33,9 +36,10 @@ std::string make_full()
 }
 
 export struct app {
-    static constexpr std::string_view major = "@APP_MAJOR_VERSION@";
-    static constexpr std::string_view minor = "@APP_MINOR_VERSION@";
-    static constexpr std::string_view patch = "@APP_PATCH_VERSION@";
+    static constexpr std::uint32_t major = @APP_MAJOR_VERSION@;
+    static constexpr std::uint32_t minor = @APP_MINOR_VERSION@;
+    static constexpr std::uint32_t patch = @APP_PATCH_VERSION@;
+
     static constexpr std::string_view pre_release = "@APP_PRE_RELEASE_VERSION@";
     static constexpr std::string_view git_commit = "@GIT_COMMIT@";
 
@@ -43,9 +47,10 @@ export struct app {
 };
 
 export struct lib {
-    static constexpr std::string_view major = "@LIB_MAJOR_VERSION@";
-    static constexpr std::string_view minor = "@LIB_MINOR_VERSION@";
-    static constexpr std::string_view patch = "@LIB_PATCH_VERSION@";
+    static constexpr std::uint32_t major = @LIB_MAJOR_VERSION@;
+    static constexpr std::uint32_t minor = @LIB_MINOR_VERSION@;
+    static constexpr std::uint32_t patch = @LIB_PATCH_VERSION@;
+
     static constexpr std::string_view pre_release = "@LIB_PRE_RELEASE_VERSION@";
     static constexpr std::string_view git_commit = "@GIT_COMMIT@";
 

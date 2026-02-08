@@ -23,6 +23,7 @@ export struct device_id {
 
 export class device {
 public:
+    struct interface;
     using vector_type = usb::descriptor::vector_type;
     using context_pointer = viu::type::unique_pointer_t<libusb_context>;
     using device_handle_pointer =
@@ -35,7 +36,11 @@ public:
     };
 
     device() = default;
-    explicit device(std::uint32_t vid, std::uint32_t pid);
+    explicit device(
+        std::uint32_t vid,
+        std::uint32_t pid,
+        std::shared_ptr<interface> xfer_iface = nullptr
+    );
 
     virtual ~device();
 
@@ -95,6 +100,24 @@ public:
         return device_descriptor_;
     }
 
+    struct interface : public viu::tickable {
+        virtual ~interface() = default;
+
+        virtual void on_transfer_request(transfer::control xfer) = 0;
+
+        virtual auto on_control_setup(
+            const libusb_control_setup& setup,
+            const std::vector<std::uint8_t>& data
+        ) -> std::expected<std::vector<std::uint8_t>, int> = 0;
+
+        virtual auto on_set_configuration(std::uint8_t index) -> int = 0;
+
+        virtual auto on_set_interface(
+            std::uint8_t interface,
+            std::uint8_t alt_setting
+        ) -> int = 0;
+    };
+
     [[nodiscard]] auto report_descriptor() const
         -> std::expected<std::vector<std::uint8_t>, error>;
 
@@ -139,47 +162,24 @@ private:
     usb::device_id device_id_{};
     std::map<const std::uint8_t, const std::uint8_t> alt_settings_{};
     usb::transfer::callback cb_{};
+
+protected:
+    std::shared_ptr<interface> xfer_iface_{};
 };
 
 static_assert(!std::copyable<device>);
 
 export class mock : public device {
 public:
-    struct interface : public viu::tickable {
-        virtual ~interface() = default;
-
-        virtual void on_transfer_request(transfer::control xfer) {};
-
-        [[nodiscard]] virtual auto on_control_setup(
-            [[maybe_unused]] const libusb_control_setup& setup,
-            [[maybe_unused]] const std::vector<std::uint8_t>& data
-        ) -> std::expected<std::vector<std::uint8_t>, int>
-        {
-            return std::unexpected{LIBUSB_ERROR_NOT_SUPPORTED};
-        }
-
-        [[nodiscard]] virtual auto on_set_configuration(
-            [[maybe_unused]] std::uint8_t index
-        ) -> int
-        {
-            return LIBUSB_ERROR_NOT_SUPPORTED;
-        }
-
-        [[nodiscard]] virtual auto on_set_interface(
-            [[maybe_unused]] std::uint8_t interface,
-            [[maybe_unused]] std::uint8_t alt_setting
-        ) -> int
-        {
-            return LIBUSB_ERROR_NOT_SUPPORTED;
-        }
-    };
+    using interface = device::interface;
 
     explicit mock(
         usb::descriptor::tree descriptor_tree,
         std::shared_ptr<interface> xfer_cb
     )
-        : descriptor_tree_{std::move(descriptor_tree)}, xfer_iface_{xfer_cb}
+        : descriptor_tree_{std::move(descriptor_tree)}
     {
+        xfer_iface_ = xfer_cb;
     }
 
     [[nodiscard]] auto pack_device_descriptor() const -> vector_type override;
@@ -239,7 +239,6 @@ private:
         -> int override;
 
     usb::descriptor::tree descriptor_tree_{};
-    std::shared_ptr<interface> xfer_iface_{};
     usb::transfer::callback cb_{};
 };
 

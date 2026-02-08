@@ -18,13 +18,13 @@ set(DAEMON_NAME ${PROJECT_NAME}d)
 set(LIB_NAME ${PROJECT_NAME})
 
 set(APP_MAJOR_VERSION 0)
-set(APP_MINOR_VERSION 1)
-set(APP_PATCH_VERSION 1)
+set(APP_MINOR_VERSION 2)
+set(APP_PATCH_VERSION 0)
 set(APP_PRE_RELEASE_VERSION "alpha")
 
 set(LIB_MAJOR_VERSION 0)
-set(LIB_MINOR_VERSION 1)
-set(LIB_PATCH_VERSION 1)
+set(LIB_MINOR_VERSION 2)
+set(LIB_PATCH_VERSION 0)
 set(LIB_PRE_RELEASE_VERSION "alpha")
 
 find_package(Git QUIET)
@@ -175,7 +175,6 @@ target_sources(${LIB_NAME}
     src/usb_basic_impl.cpp
     src/usb_device_proxy_impl.cpp
     src/usb_impl.cpp
-    src/usb_mock_impl.cpp
     src/usbip_socket_impl.cpp
     src/vhci_impl.cpp
 

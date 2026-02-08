@@ -137,7 +137,7 @@ def build_viud(enable_tidy, enable_format, build_type, enable_coverage):
     )
 
 
-def build_mouse_example(enable_tidy, build_type):
+def build_mouse_example(enable_tidy, enable_format, build_type):
     src = os.path.join(ROOT_DIR, "examples", "mouse")
     build = os.path.join(ROOT_DIR, "out", "build", "examples", "mouse")
 
@@ -149,6 +149,7 @@ def build_mouse_example(enable_tidy, build_type):
         f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
         "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         f"-DENABLE_CLANG_TIDY={enable_tidy}",
+        f"-DENABLE_CLANG_FORMAT={enable_format}",
         "-GNinja",
         "-S", src,
         "-B", build,
@@ -156,10 +157,14 @@ def build_mouse_example(enable_tidy, build_type):
 
     run(["./cmake4", "--build", build])
 
+    if enable_format == "ON":
+        print("Running clang-format on mouse example...")
+        run(["./cmake4", "--build", build, "--target", "format"])
+
 
 def build_all(enable_tidy, enable_format, build_type, enable_coverage):
     build_viud(enable_tidy, enable_format, build_type, enable_coverage)
-    build_mouse_example(enable_tidy, build_type)
+    build_mouse_example(enable_tidy, enable_format, build_type)
 
 
 def uninstall_service():

@@ -126,13 +126,55 @@ auto service::check_cli_params(
     return {};
 }
 
-auto service::app_proxy(const std::uint32_t vid, const std::uint32_t pid)
-    -> viu::response
+auto service::app_proxy(
+    const std::uint32_t vid,
+    const std::uint32_t pid,
+    const std::filesystem::path& catalog_path
+) -> viu::response
 {
-    const auto device = std::make_shared<viu::usb::device>(vid, pid);
+    if (catalog_path.empty()) {
+        const auto device = std::make_shared<viu::usb::device>(vid, pid);
+        proxy_devices_.emplace_back(
+            std::make_unique<viu::device::proxy>(device)
+        );
+
+        return viu::response::success("Proxy device created successfully");
+    }
+
+    const auto plugin_factory = virtual_device_manager_.register_catalog(
+        catalog_path.string()
+    );
+    viu::_assert(plugin_factory != nullptr);
+
+    auto ss = std::stringstream{};
+    std::println(ss, "Catalog Information:");
+    std::println(ss, "  Name: {}", plugin_factory->name());
+    std::println(ss, "  Version: {}", plugin_factory->version());
+    std::println(
+        ss,
+        "  Number of devices: {}",
+        plugin_factory->number_of_devices()
+    );
+
+    // TODO: support multiple devices
+    viu::_assert(plugin_factory->number_of_devices() == 1);
+
+    auto vd = virtual_device_manager_.device(
+        catalog_path.string(),
+        plugin_factory->device_name(0)
+    );
+    viu::_assert(vd && *vd != nullptr);
+
+    const auto device = std::make_shared<viu::usb::device>(vid, pid, *vd);
     proxy_devices_.emplace_back(std::make_unique<viu::device::proxy>(device));
 
-    return viu::response::success("Proxy device created successfully");
+    std::println(
+        ss,
+        "Proxy device created successfully using '{}' interface",
+        plugin_factory->name()
+    );
+
+    return viu::response::success(ss.str());
 }
 
 auto service::app_save_config(
@@ -257,6 +299,7 @@ auto service::run_proxydev_command(const std::span<const char*>& args)
     namespace po = boost::program_options;
     auto desc = po::options_description{"Proxy usb connection"};
     auto device = ::viu::daemon::args::device_id{};
+    auto catalog_path = std::filesystem::path{};
     // clang-format off
     desc.add_options()
     ("help,h", "Show this message")
@@ -264,8 +307,14 @@ auto service::run_proxydev_command(const std::span<const char*>& args)
         "device,d",
         po::value<::viu::daemon::args::device_id>(&device),
         "Device id as vid:pid"
+    )
+    (
+        "catalog,m",
+        po::value<std::filesystem::path>(&catalog_path),
+        "Path to a device catalog"
     );
     // clang-format on
+
     const auto vm = parse_command(args, desc);
     if (vm.count("help")) {
         auto ss = std::stringstream{};
@@ -280,7 +329,7 @@ auto service::run_proxydev_command(const std::span<const char*>& args)
         );
     }
 
-    return app_proxy(device.vid(), device.pid());
+    return app_proxy(device.vid(), device.pid(), catalog_path);
 }
 
 auto service::run_save_command(const std::span<const char*>& args)
