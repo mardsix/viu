@@ -4,9 +4,9 @@ viu uses the USBIP VHCI kernel driver (vhci_hcd) to attach virtual USB
 devices.
 
 **Important:**
-Many Linux distributions already ship this driver as a kernel module.
-In that case, you do not need to build it, and only the
-[Install](#install)
+Many Linux distributions already include this driver as a prebuilt
+kernel module. If that’s the case, you don’t need to build it yourself - simply
+follow the [Install](#install) instructions.
 
 ## Check if the driver is already available
 

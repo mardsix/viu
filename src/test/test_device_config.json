@@ -11,7 +11,7 @@
         "bMaxPacketSize0": 9,
         "idVendor": "0x0000",
         "idProduct": "0x0001",
-        "bcdDevice": "0x606",
+        "bcdDevice": "0x504",
         "iManufacturer": 1,
         "iProduct": 2,
         "iSerial": 3,
@@ -21,7 +21,7 @@
             "Configuration Descriptor": {
               "bLength": 9,
               "bDescriptorType": 2,
-              "wTotalLength": "0x0044",
+              "wTotalLength": "0x0062",
               "bNumInterfaces": 1,
               "bConfigurationValue": 1,
               "iConfiguration": 0,
@@ -50,6 +50,13 @@
                               "bmAttributes": 3,
                               "wMaxPacketSize": "0x0008",
                               "bInterval": 10
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0008"
                             }
                           },
                           {
@@ -60,6 +67,13 @@
                               "bmAttributes": 3,
                               "wMaxPacketSize": "0x0008",
                               "bInterval": 10
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0008"
                             }
                           },
                           {
@@ -68,8 +82,15 @@
                               "bDescriptorType": 5,
                               "bEndpointAddress": "0x02",
                               "bmAttributes": 5,
-                              "wMaxPacketSize": "0x0c00",
+                              "wMaxPacketSize": "0x0400",
                               "bInterval": 1
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0400"
                             }
                           },
                           {
@@ -78,8 +99,15 @@
                               "bDescriptorType": 5,
                               "bEndpointAddress": "0x82",
                               "bmAttributes": 5,
-                              "wMaxPacketSize": "0x0c00",
+                              "wMaxPacketSize": "0x0400",
                               "bInterval": 1
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0400"
                             }
                           },
                           {
@@ -88,8 +116,15 @@
                               "bDescriptorType": 5,
                               "bEndpointAddress": "0x03",
                               "bmAttributes": 2,
-                              "wMaxPacketSize": "0x0040",
+                              "wMaxPacketSize": "0x0200",
                               "bInterval": 1
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0200"
                             }
                           },
                           {
@@ -98,10 +133,17 @@
                               "bDescriptorType": 5,
                               "bEndpointAddress": "0x83",
                               "bmAttributes": 2,
-                              "wMaxPacketSize": "0x0040",
+                              "wMaxPacketSize": "0x0200",
                               "bInterval": 1,
                               "bRefresh": "0x00",
                               "bSynchAddress": "0x00"
+                            },
+                            "Endpoint Companion": {
+                              "bLength": 6,
+                              "bDescriptorType": 48,
+                              "bMaxBurst": 0,
+                              "bmAttributes": 0,
+                              "wBytesPerInterval": "0x0200"
                             }
                           }
                         ]
@@ -122,7 +164,10 @@
               "StringDescriptor": {
                 "bLength": 4,
                 "bDescriptorType": 3,
-                "string": ["0x09","0x04"]
+                "string": [
+                  "0x09",
+                  "0x04"
+                ]
               }
             }
           ]
@@ -165,26 +210,21 @@
             "bLength": 7,
             "bDescriptorType": 16,
             "bDevCapabilityType": 2,
-            "daDevCapability": [
-              14,
-              1,
-              0,
-              0
-            ]
+            "USB 2.0 Extension": {
+              "bmAttributes": "0x0000010E"
+            }
           },
           {
             "bLength": 10,
             "bDescriptorType": 16,
             "bDevCapabilityType": 3,
-            "daDevCapability": [
-              0,
-              15,
-              0,
-              1,
-              10,
-              244,
-              1
-            ]
+            "SuperSpeed USB": {
+              "bmAttributes": 0,
+              "wSpeedSupported": "0x000F",
+              "bFunctionalitySupport": 1,
+              "bU1DevExitLat": 10,
+              "bU2DevExitLat": 500
+            }
           }
         ]
       }

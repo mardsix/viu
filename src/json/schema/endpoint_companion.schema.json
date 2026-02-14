@@ -1,0 +1,29 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "bLength": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bDescriptorType": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bMaxBurst": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bmAttributes": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "wBytesPerInterval": {
+            "$ref": "types.schema.json#/$defs/usbWord"
+        }
+    },
+    "required": [
+        "bLength",
+        "bDescriptorType",
+        "bMaxBurst",
+        "bmAttributes",
+        "wBytesPerInterval"
+    ]
+}

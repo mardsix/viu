@@ -579,30 +579,6 @@ struct in {
     }
 
 private:
-    void parse_json(boost::property_tree::ptree const& pt)
-    {
-        using boost::property_tree::ptree;
-
-        std::for_each(
-            std::cbegin(pt),
-            std::cend(pt),
-            [this](const ptree::const_iterator::value_type& it) {
-                if (!it.second.get_value<std::string>().empty()) {
-                    auto f = it.second.get_value<std::string>();
-                    if (format::is_hex(f)) {
-                        f = std::to_string(
-                            format::integral<std::uint64_t>::from_hex(f)
-                        );
-                    }
-
-                    is_ << f << " ";
-                }
-
-                parse_json(it.second);
-            }
-        );
-    }
-
     void from_json(const std::filesystem::path& path)
     {
         try {

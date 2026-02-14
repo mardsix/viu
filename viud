@@ -149,7 +149,6 @@ def build_mouse_example(enable_tidy, enable_format, build_type):
         f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
         "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         f"-DENABLE_CLANG_TIDY={enable_tidy}",
-        f"-DENABLE_CLANG_FORMAT={enable_format}",
         "-GNinja",
         "-S", src,
         "-B", build,

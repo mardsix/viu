@@ -9,7 +9,9 @@ module viu.usb;
 import std;
 
 import viu.assert;
+import viu.error;
 import viu.format;
+import viu.io;
 import viu.transfer;
 import viu.usb.descriptors;
 
@@ -116,7 +118,20 @@ device::device(
 
                 libusb_result = open_cloned_libusb_device(usb_device);
                 if (libusb_result == LIBUSB_SUCCESS) {
-                    device_descriptor_ = descriptor;
+                    descriptor_tree_ = viu::usb::descriptor::tree{
+                        descriptor,
+                        config_descriptor(),
+                        string_descriptors(),
+                        bos_descriptor().value_or(
+                            viu::usb::descriptor::bos_descriptor_pointer{
+                                nullptr,
+                                [](libusb_bos_descriptor*) {}
+                            }
+                        ),
+                        report_descriptor().value_or(
+                            std::vector<std::uint8_t>{}
+                        )
+                    };
                     break;
                 }
             }
@@ -133,7 +148,7 @@ device::device(
     }
 }
 
-auto device::underlying_handle() const
+auto device::underlying_handle() const -> libusb_device_handle*
 {
     viu::_assert(device_handle_ != nullptr);
     return device_handle_.get();
@@ -177,6 +192,11 @@ void device::close()
             std::println(std::cerr, "Failed to release interfaces: {}", result);
         }
     }
+}
+
+auto device::device_descriptor() const noexcept -> libusb_device_descriptor
+{
+    return descriptor_tree_.device_descriptor();
 }
 
 auto device::config_descriptor(std::optional<std::uint8_t> index) const
@@ -223,37 +243,37 @@ auto device::count_interfaces() const -> std::uint8_t
 auto device::ep_transfer_type(std::uint8_t ep_address) const
     -> std::expected<libusb_endpoint_transfer_type, error>
 {
-    using viu::format::unsafe::vectorize;
-
-    const auto current_config_descriptor = config_descriptor();
-    viu::_assert(current_config_descriptor->interface != nullptr);
-
-    const auto ifaces = vectorize(
-        current_config_descriptor->interface,
-        current_config_descriptor->bNumInterfaces
-    );
-
     constexpr auto flatten_from = [](auto op) {
         return std::views::transform(op) | std::views::join;
     };
 
-    const auto vector_of_altsettings = [](auto interface) {
-        return vectorize(interface.altsetting, interface.num_altsetting);
+    auto interfaces = std::vector<usb::descriptor::usb_interface>{};
+    descriptor_tree_.device_config().read(
+        usb::descriptor::key::interface,
+        interfaces
+    );
+
+    const auto vector_of_altsettings = [](const auto& interface) {
+        auto v = std::vector<usb::descriptor::interface>{};
+        interface.read(usb::descriptor::key::altsetting, v);
+        return v;
     };
 
-    const auto vector_of_endpoints = [](auto altsetting) {
-        return vectorize(altsetting.endpoint, altsetting.bNumEndpoints);
+    const auto vector_of_endpoints = [](const auto& altsetting) {
+        auto v = std::vector<usb::descriptor::endpoint>{};
+        altsetting.read(usb::descriptor::key::ep, v);
+        return v;
     };
 
-    auto endpoints = ifaces | flatten_from(vector_of_altsettings) |
+    auto endpoints = interfaces | flatten_from(vector_of_altsettings) |
                      flatten_from(vector_of_endpoints) |
-                     std::views::filter([ep_address](auto ep) {
-                         return ep.bEndpointAddress == ep_address;
+                     std::views::filter([ep_address](const auto& ep) {
+                         return ep.address() == ep_address;
                      });
 
     for (const auto& ep : endpoints) {
         // TODO: return the type for the current altsetting
-        const auto xfer_type = ep.bmAttributes & ep_transfer_type_mask;
+        const auto xfer_type = ep.attributes() & ep_transfer_type_mask;
         return static_cast<libusb_endpoint_transfer_type>(xfer_type);
     }
 
@@ -263,12 +283,8 @@ auto device::ep_transfer_type(std::uint8_t ep_address) const
 auto device::pack_device_descriptor() const -> vector_type
 {
     auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(device_descriptor());
-
-    const auto current_config_descriptor = config_descriptor();
-    viu::_assert(current_config_descriptor != nullptr);
-
-    desc_packer.pack(*current_config_descriptor);
+    desc_packer.pack(descriptor_tree_.device_descriptor());
+    desc_packer.pack(descriptor_tree_.device_config());
     return desc_packer.data();
 }
 
@@ -306,13 +322,12 @@ auto device::set_configuration(std::uint8_t index) -> int
 auto device::pack_config_descriptor(std::uint8_t index) const -> vector_type
 {
     viu::_assert(has_valid_handle());
-    viu::_assert(index < device_descriptor().bNumConfigurations);
-
-    const auto config_desc = config_descriptor(index);
-    viu::_assert(config_desc != nullptr);
+    viu::_assert(
+        index < descriptor_tree_.device_descriptor().bNumConfigurations
+    );
 
     auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(*config_desc);
+    desc_packer.pack(descriptor_tree_.device_config());
     return desc_packer.data();
 }
 
@@ -344,11 +359,9 @@ auto device::pack_bos_descriptor() const -> vector_type
 {
     viu::_assert(has_valid_handle());
 
-    const auto bos_desc = bos_descriptor();
-    viu::_assert(bos_desc.has_value());
-
     auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(bos_desc->get());
+    desc_packer.pack(descriptor_tree_.bos_descriptor());
+
     return desc_packer.data();
 }
 
@@ -450,11 +463,23 @@ auto device::pack_string_descriptor(
 ) const -> vector_type
 {
     viu::_assert(has_valid_handle());
-    auto string_desc = string_descriptor<std::uint8_t>(language_id, index);
-    viu::_assert(string_desc.has_value());
+
+    const auto string_descriptors = descriptor_tree_.string_descriptors();
+    const auto desc_vector = string_descriptors.find(language_id);
+    if (desc_vector == std::end(string_descriptors)) {
+        return {};
+    }
+
+    if (index > std::size(desc_vector->second)) {
+        return {};
+    }
 
     auto descriptor = vector_type{};
-    usb::descriptor::packer::to_packing_type(*string_desc, descriptor);
+    usb::descriptor::packer::to_packing_type(
+        desc_vector->second.at(std::cmp_equal(index, 0) ? 0 : index - 1),
+        descriptor
+    );
+
     return descriptor;
 }
 
@@ -491,16 +516,9 @@ auto device::report_descriptor() const
 
 auto device::pack_report_descriptor() const -> vector_type
 {
-    const auto hid_report_descriptor = report_descriptor();
-
-    if (!hid_report_descriptor.has_value()) {
-        return {};
-    }
-
-    viu::_assert(std::size(*hid_report_descriptor) > 0);
-
+    auto hid_report_descriptor = descriptor_tree_.report_descriptor();
     auto report = vector_type{};
-    usb::descriptor::packer::to_packing_type(*hid_report_descriptor, report);
+    usb::descriptor::packer::to_packing_type(hid_report_descriptor, report);
     return report;
 }
 
@@ -509,6 +527,37 @@ auto device::is_self_powered() const -> bool
     auto config_desc = config_descriptor();
     viu::_assert(config_desc != nullptr);
     return (config_desc->bmAttributes & self_powered_mask) != 0;
+}
+
+auto device::save_config(const std::filesystem::path& path) const
+    -> viu::response
+{
+    descriptor_tree_.save(path);
+
+    return viu::response::success(
+        std::format("Device configuration saved to {}", path.string())
+    );
+}
+
+auto device::save_hid_report(const std::filesystem::path& path) const
+    -> viu::response
+{
+
+    if (!viu::io::bin::file::save(path, descriptor_tree_.report_descriptor())) {
+        return viu::response::failure(
+            std::format("Failed to save HID report to {}", path.string()),
+            viu::make_error(error::io_failed, "Invalid argument").error()
+        );
+    }
+
+    return viu::response::success(
+        std::format("HID report saved to {}", path.string())
+    );
+}
+
+auto device::speed() const noexcept -> std::uint16_t
+{
+    return device_descriptor().bcdUSB;
 }
 
 auto device::make_handle(libusb_device* const dev)
@@ -597,6 +646,7 @@ auto device::current_altsetting(std::uint8_t interface) -> std::uint8_t
 
 void device::submit_bulk_transfer(const usb::transfer::info& transfer_info)
 {
+    const auto is_mock = underlying_handle() == nullptr;
     auto transfer_control =
         usb::transfer::fill_bulk(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
@@ -605,11 +655,14 @@ void device::submit_bulk_transfer(const usb::transfer::info& transfer_info)
         xfer_iface_->on_transfer_request(transfer_control);
     }
 
-    transfer_control.submit(libusb_ctx(), cb_);
+    if (!is_mock) {
+        transfer_control.submit(libusb_ctx(), cb_);
+    }
 }
 
 void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
 {
+    const auto is_mock = underlying_handle() == nullptr;
     auto transfer_control =
         usb::transfer::fill_interrupt(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
@@ -618,11 +671,14 @@ void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
         xfer_iface_->on_transfer_request(transfer_control);
     }
 
-    transfer_control.submit(libusb_ctx(), cb_);
+    if (!is_mock) {
+        transfer_control.submit(libusb_ctx(), cb_);
+    }
 }
 
 void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
 {
+    const auto is_mock = underlying_handle() == nullptr;
     auto transfer_control =
         usb::transfer::fill_iso(transfer_info, underlying_handle());
     transfer_control.attach(transfer_info.callback, cb_);
@@ -631,7 +687,9 @@ void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
         xfer_iface_->on_transfer_request(transfer_control);
     }
 
-    transfer_control.submit(libusb_ctx(), cb_);
+    if (!is_mock) {
+        transfer_control.submit(libusb_ctx(), cb_);
+    }
 }
 
 auto device::submit_control_setup(
@@ -694,62 +752,6 @@ void device::cancel_transfers() { cb_.cancel(); }
 
 using viu::usb::mock;
 
-auto mock::has_valid_handle() const noexcept -> bool { return true; }
-
-auto mock::pack_device_descriptor() const -> vector_type
-{
-    auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(device_descriptor());
-    desc_packer.pack(descriptor_tree_.device_config());
-    return desc_packer.data();
-}
-
-auto mock::pack_config_descriptor(std::uint8_t index) const -> vector_type
-{
-    auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(descriptor_tree_.device_config());
-    return desc_packer.data();
-}
-
-auto mock::pack_bos_descriptor() const -> vector_type
-{
-    auto desc_packer = usb::descriptor::packer{};
-    desc_packer.pack(descriptor_tree_.bos_descriptor());
-    return desc_packer.data();
-}
-
-auto mock::pack_report_descriptor() const -> vector_type
-{
-    auto hid_report_descriptor = descriptor_tree_.report_descriptor();
-    auto report = vector_type{};
-    usb::descriptor::packer::to_packing_type(hid_report_descriptor, report);
-    return report;
-}
-
-auto mock::pack_string_descriptor(
-    std::uint16_t language_id,
-    std::uint8_t index
-) const -> vector_type
-{
-    const auto string_descriptors = descriptor_tree_.string_descriptors();
-    const auto desc_vector = string_descriptors.find(language_id);
-    if (desc_vector == std::end(string_descriptors)) {
-        return {};
-    }
-
-    if (index > std::size(desc_vector->second)) {
-        return {};
-    }
-
-    auto descriptor = vector_type{};
-    usb::descriptor::packer::to_packing_type(
-        desc_vector->second.at(std::cmp_equal(index, 0) ? 0 : index - 1),
-        descriptor
-    );
-
-    return descriptor;
-}
-
 auto mock::set_configuration(std::uint8_t index) -> int
 {
     viu::_assert(xfer_iface_ != nullptr);
@@ -763,77 +765,6 @@ auto mock::on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
     return xfer_iface_->on_set_interface(interface, alt_setting);
 }
 
-auto mock::ep_transfer_type(std::uint8_t ep_address) const
-    -> std::expected<libusb_endpoint_transfer_type, error>
-{
-    constexpr auto flatten_from = [](auto op) {
-        return std::views::transform(op) | std::views::join;
-    };
-
-    auto interfaces = std::vector<usb::descriptor::usb_interface>{};
-    descriptor_tree_.device_config().read(
-        usb::descriptor::key::interface,
-        interfaces
-    );
-
-    const auto vector_of_altsettings = [](const auto& interface) {
-        auto v = std::vector<usb::descriptor::interface>{};
-        interface.read(usb::descriptor::key::altsetting, v);
-        return v;
-    };
-
-    const auto vector_of_endpoints = [](const auto& altsetting) {
-        auto v = std::vector<usb::descriptor::endpoint>{};
-        altsetting.read(usb::descriptor::key::ep, v);
-        return v;
-    };
-
-    auto endpoints = interfaces | flatten_from(vector_of_altsettings) |
-                     flatten_from(vector_of_endpoints) |
-                     std::views::filter([ep_address](const auto& ep) {
-                         return ep.address() == ep_address;
-                     });
-
-    for (const auto& ep : endpoints) {
-        // TODO: return the type for the current altsetting
-        const auto xfer_type = ep.attributes() & ep_transfer_type_mask;
-        return static_cast<libusb_endpoint_transfer_type>(xfer_type);
-    }
-
-    return std::unexpected(error::ep_get_transfer_type_failed);
-}
-
-void mock::complete_transfer(const usb::transfer::control& usb_transfer) const
-{
-    viu::_assert(xfer_iface_ != nullptr);
-    xfer_iface_->on_transfer_request(usb_transfer);
-}
-
-void mock::submit_bulk_transfer(const usb::transfer::info& transfer_info)
-{
-    auto transfer_control = usb::transfer::fill_bulk(transfer_info, nullptr);
-    transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(libusb_ctx(), cb_);
-    complete_transfer(transfer_control);
-}
-
-void mock::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
-{
-    auto transfer_control =
-        usb::transfer::fill_interrupt(transfer_info, nullptr);
-    transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(libusb_ctx(), cb_);
-    complete_transfer(transfer_control);
-}
-
-void mock::submit_iso_transfer(const usb::transfer::info& transfer_info)
-{
-    auto transfer_control = usb::transfer::fill_iso(transfer_info, nullptr);
-    transfer_control.attach(transfer_info.callback, cb_);
-    transfer_control.submit(libusb_ctx(), cb_);
-    complete_transfer(transfer_control);
-}
-
 auto mock::submit_control_setup(
     const libusb_control_setup& setup,
     const std::vector<std::uint8_t>& data
@@ -842,5 +773,3 @@ auto mock::submit_control_setup(
     viu::_assert(xfer_iface_ != nullptr);
     return xfer_iface_->on_control_setup(setup, data);
 }
-
-void mock::cancel_transfers() { cb_.cancel(); }

@@ -1,6 +1,5 @@
 {
   "type": "object",
-  "additionalProperties": false,
   "properties": {
     "bLength": {
       "$ref": "types.schema.json#/$defs/usbByte"
@@ -11,6 +10,12 @@
     "bDevCapabilityType": {
       "$ref": "types.schema.json#/$defs/usbByte"
     },
+    "USB 2.0 Extension": {
+      "$ref": "usb_2_0_extension.schema.json"
+    },
+    "SuperSpeed USB": {
+      "$ref": "superspeed_usb.schema.json"
+    },
     "daDevCapability": {
       "$ref": "types.schema.json#/$defs/daUsbBytes"
     }
@@ -18,7 +23,50 @@
   "required": [
     "bLength",
     "bDescriptorType",
-    "bDevCapabilityType",
-    "daDevCapability"
-  ]
+    "bDevCapabilityType"
+  ],
+  "if": {
+    "properties": {
+      "bDevCapabilityType": {
+        "const": 2
+      }
+    },
+    "required": [
+      "bDevCapabilityType"
+    ]
+  },
+  "then": {
+    "required": [
+      "USB 2.0 Extension"
+    ],
+    "not": {
+      "required": [
+        "SuperSpeed USB",
+        "daDevCapability"
+      ]
+    }
+  },
+  "else": {
+    "if": {
+      "properties": {
+        "bDevCapabilityType": {
+          "const": 3
+        }
+      },
+      "required": [
+        "bDevCapabilityType"
+      ]
+    },
+    "then": {
+      "required": [
+        "SuperSpeed USB"
+      ],
+      "not": {
+        "required": [
+          "USB 2.0 Extension",
+          "daDevCapability"
+        ]
+      }
+    }
+  }
 }

@@ -185,32 +185,7 @@ auto service::app_save_config(
 {
     const auto device = std::make_shared<viu::usb::device>(vid, pid);
     const auto proxy_usb_device = viu::device::proxy{device};
-    const auto device_desc = proxy_usb_device.device_descriptor();
-    const auto config_desc = proxy_usb_device.config_descriptor();
-    const auto str_descs = proxy_usb_device.string_descriptors();
-    const auto bos_desc = proxy_usb_device.bos_descriptor().value_or(
-        viu::usb::descriptor::bos_descriptor_pointer{
-            nullptr,
-            [](libusb_bos_descriptor*) {}
-        }
-    );
-    const auto report_desc = proxy_usb_device.report_descriptor().value_or(
-        std::vector<std::uint8_t>{}
-    );
-
-    auto desc = viu::usb::descriptor::tree{
-        device_desc,
-        config_desc,
-        str_descs,
-        bos_desc,
-        report_desc
-    };
-
-    desc.save(path);
-
-    return viu::response::success(
-        "Device configuration saved to " + path.string()
-    );
+    return proxy_usb_device.save_config(path);
 }
 
 auto service::app_save_hid_report(
@@ -221,18 +196,7 @@ auto service::app_save_hid_report(
 {
     const auto device = std::make_shared<viu::usb::device>(vid, pid);
     const auto proxy_usb_device = viu::device::proxy{device};
-    const auto report_desc = proxy_usb_device.report_descriptor().value_or(
-        std::vector<std::uint8_t>{}
-    );
-
-    if (!viu::io::bin::file::save(path, report_desc)) {
-        return viu::response::failure(
-            "Failed to save HID report to " + path.string(),
-            viu::make_error(error::invalid_argument, "Invalid argument").error()
-        );
-    }
-
-    return viu::response::success("HID report saved to " + path.string());
+    return proxy_usb_device.save_hid_report(path);
 }
 
 auto service::app_mock(

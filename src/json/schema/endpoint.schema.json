@@ -40,6 +40,9 @@
         "bInterval"
       ]
     },
+    "Endpoint Companion": {
+      "$ref": "endpoint_companion.schema.json"
+    },
     "daExtra": {
       "$ref": "types.schema.json#/$defs/daUsbBytes"
     }

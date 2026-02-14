@@ -84,7 +84,7 @@ podman run --rm -i -v "$PWD":"$PWD" -w "$PWD" viu ./viud build
 
 ### Run USB mouse emulation example
 ```sh
-./cli mock \
+viud mock \
     -c $(pwd)/examples/mouse/device.config \
     -m $(pwd)/out/build/examples/mouse/libviumouse-mock.so
 ```

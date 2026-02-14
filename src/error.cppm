@@ -6,7 +6,7 @@ import viu.boost;
 
 namespace viu {
 
-export enum class error_category : std::uint8_t { none, cli };
+export enum class error_category : std::uint8_t { none, cli, usb };
 
 template <typename T>
 concept enum_type = std::is_enum_v<T>;
@@ -151,7 +151,7 @@ export struct response final {
     {
     }
 
-    const std::string& message() const noexcept { return message_; }
+    const std::string_view message() const noexcept { return message_; }
     const std::optional<error>& error_value() const noexcept { return error_; }
     auto has_error() const noexcept { return error_.has_value(); }
     auto is_success() const noexcept { return !has_error(); }

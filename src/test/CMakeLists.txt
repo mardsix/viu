@@ -86,6 +86,7 @@ target_sources(${TEST_EXECUTABLE_NAME}
     ${VIU_TOP_SOURCE_DIR}/src/descriptors/packer.cppm
     ${VIU_TOP_SOURCE_DIR}/src/descriptors/tree.cppm
     ${VIU_TOP_SOURCE_DIR}/src/descriptors/descriptor_classes.cppm
+    ${VIU_TOP_SOURCE_DIR}/src/error.cppm
     ${VIU_TOP_SOURCE_DIR}/src/format.cppm
     ${VIU_TOP_SOURCE_DIR}/src/io.cppm
     ${VIU_TOP_SOURCE_DIR}/src/json/json.cppm
@@ -126,8 +127,10 @@ set(BOOST_LIBRARYDIR ${BOOST_ROOT}/lib)
 set(Boost_USE_STATIC_LIBS ON)
 
 find_package(Boost 1.88.0 REQUIRED)
-find_package(Boost COMPONENTS json REQUIRED)
-find_package(Boost COMPONENTS thread REQUIRED)
+find_package(Boost REQUIRED COMPONENTS json)
+find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost REQUIRED COMPONENTS serialization)
+find_package(Boost REQUIRED COMPONENTS thread)
 
 include_directories(
     ${Boost_INCLUDE_DIRS}
@@ -136,12 +139,14 @@ include_directories(
 
 target_link_libraries(
     ${TEST_EXECUTABLE_NAME}
-    Boost::json
-    Boost::thread
-    GTest::gtest_main
-    GTest::gmock_main
-    udev
-    systemd
+    PRIVATE Boost::json
+    PRIVATE Boost::program_options
+    PRIVATE Boost::serialization
+    PRIVATE Boost::thread
+    PRIVATE GTest::gtest_main
+    PRIVATE GTest::gmock_main
+    PRIVATE udev
+    PRIVATE systemd
     ${CMAKE_SOURCE_DIR}/out/install/libusb/lib/libusb-1.0.a
 )
 

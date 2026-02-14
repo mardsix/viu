@@ -7,6 +7,7 @@ export module viu.device.proxy;
 import std;
 
 import viu.device.basic;
+import viu.error;
 import viu.transfer;
 import viu.usb;
 import viu.vhci;
@@ -24,17 +25,9 @@ public:
     auto operator=(const proxy&) -> proxy& = delete;
     auto operator=(proxy&&) -> proxy& = delete;
 
-    auto config_descriptor() const { return usb_device_->config_descriptor(); }
-    auto bos_descriptor() const { return usb_device_->bos_descriptor(); }
-
-    auto device_descriptor() const { return usb_device_->device_descriptor(); }
-
-    auto string_descriptors() const
-    {
-        return usb_device_->string_descriptors();
-    }
-
-    auto report_descriptor() const { return usb_device_->report_descriptor(); }
+    auto save_config(const std::filesystem::path& path) const -> viu::response;
+    auto save_hid_report(const std::filesystem::path& path) const
+        -> viu::response;
 
 private:
     using transfer_tuple = std::tuple<

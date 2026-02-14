@@ -1,0 +1,28 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "bmAttributes": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "wSpeedSupported": {
+            "$ref": "types.schema.json#/$defs/usbWord"
+        },
+        "bFunctionalitySupport": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bU1DevExitLat": {
+            "$ref": "types.schema.json#/$defs/usbByte"
+        },
+        "bU2DevExitLat": {
+            "$ref": "types.schema.json#/$defs/usbWord"
+        }
+    },
+    "required": [
+        "bmAttributes",
+        "wSpeedSupported",
+        "bFunctionalitySupport",
+        "bU1DevExitLat",
+        "bU2DevExitLat"
+    ]
+}

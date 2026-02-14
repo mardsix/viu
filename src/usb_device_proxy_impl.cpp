@@ -26,6 +26,7 @@ module viu.device.proxy;
 import std;
 
 import viu.assert;
+import viu.error;
 import viu.format;
 import viu.transfer;
 import viu.usb.descriptors;
@@ -74,6 +75,20 @@ proxy::~proxy()
 {
     device_thread_.request_stop();
     device_thread_.join();
+}
+
+auto proxy::save_config(const std::filesystem::path& path) const
+    -> viu::response
+{
+    viu::_assert(usb_device_ != nullptr);
+    return usb_device_->save_config(path);
+}
+
+auto proxy::save_hid_report(const std::filesystem::path& path) const
+    -> viu::response
+{
+    viu::_assert(usb_device_ != nullptr);
+    return usb_device_->save_hid_report(path);
 }
 
 void proxy::read_data_from_device(const usbip::command& cmd)

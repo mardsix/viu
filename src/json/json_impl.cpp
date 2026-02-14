@@ -15,13 +15,42 @@ void parser::write_da(const boost::json::array& a)
 
 void parser::build_extra(const boost::json::object& jobject)
 {
+    std::uint32_t total_bytes = 0;
+
+    if (jobject.contains("Endpoint Companion")) {
+        total_bytes += 6;
+    }
+
     if (jobject.contains("daExtra")) {
         const auto& extra = jobject.at("daExtra").as_array();
-        write_num(extra.size());
-        write_da(extra);
-    } else {
-        write_num(0);
+        total_bytes += extra.size();
     }
+
+    if (total_bytes != 0) {
+        write_num(total_bytes);
+
+        if (jobject.contains("Endpoint Companion")) {
+            const auto& ec = jobject.at("Endpoint Companion").as_object();
+            write_num(read_u32(ec, "bLength"));
+            write_num(read_u32(ec, "bDescriptorType"));
+            write_num(read_u32(ec, "bMaxBurst"));
+            write_num(read_u32(ec, "bmAttributes"));
+            std::uint16_t wBytes = static_cast<std::uint16_t>(
+                read_u32(ec, "wBytesPerInterval")
+            );
+            write_num(wBytes & 0xFF);
+            write_num((wBytes >> 8) & 0xFF);
+        }
+
+        if (jobject.contains("daExtra")) {
+            const auto& extra = jobject.at("daExtra").as_array();
+            write_da(extra);
+        }
+
+        return;
+    }
+
+    write_num(0);
 }
 
 void parser::build_endpoint(const boost::json::object& ep)
@@ -31,6 +60,7 @@ void parser::build_endpoint(const boost::json::object& ep)
     write_num(read_u32(d, "bLength"));
     write_num(read_u32(d, "bDescriptorType"));
     write_num(read_u32(d, "bEndpointAddress"));
+
     write_num(read_u32(d, "bmAttributes"));
     write_num(read_u32(d, "wMaxPacketSize"));
     write_num(read_u32(d, "bInterval"));
@@ -143,11 +173,41 @@ void parser::build_bos(const boost::json::object& bos)
         const auto& c = cap.as_object();
         write_num(read_u32(c, "bLength"));
         write_num(read_u32(c, "bDescriptorType"));
-        write_num(read_u32(c, "bDevCapabilityType"));
 
-        const auto& d = c.at("daDevCapability").as_array();
-        write_num(d.size());
-        write_da(d);
+        auto dev_cap_type = read_u32(c, "bDevCapabilityType");
+        write_num(dev_cap_type);
+
+        if (dev_cap_type == 2 && c.contains("USB 2.0 Extension")) {
+            const auto& usb2_ext = c.at("USB 2.0 Extension").as_object();
+            auto bm_attr = read_u32(usb2_ext, "bmAttributes");
+            write_num(4); // TODO: set to packed size of the descriptors
+            write_num(bm_attr & 0xFF);
+            write_num((bm_attr >> 8) & 0xFF);
+            write_num((bm_attr >> 16) & 0xFF);
+            write_num((bm_attr >> 24) & 0xFF);
+        } else if (dev_cap_type == 3 && c.contains("SuperSpeed USB")) {
+            const auto& ss_usb = c.at("SuperSpeed USB").as_object();
+            const auto bm_attr = read_u32(ss_usb, "bmAttributes");
+            const auto w_speed = read_u32(ss_usb, "wSpeedSupported");
+            const auto b_func = read_u32(ss_usb, "bFunctionalitySupport");
+            const auto b_u1_lat = read_u32(ss_usb, "bU1DevExitLat");
+            const auto w_u2_lat = read_u32(ss_usb, "bU2DevExitLat");
+
+            write_num(7);
+            write_num(bm_attr & 0xFF);
+            write_num(w_speed & 0xFF);
+            write_num((w_speed >> 8) & 0xFF);
+            write_num(b_func & 0xFF);
+            write_num(b_u1_lat & 0xFF);
+            write_num(w_u2_lat & 0xFF);
+            write_num((w_u2_lat >> 8) & 0xFF);
+        } else if (c.contains("daDevCapability")) {
+            const auto& d = c.at("daDevCapability").as_array();
+            write_num(d.size());
+            write_da(d);
+        } else {
+            write_num(0);
+        }
     });
 }
 
