@@ -3,6 +3,8 @@
 
 #include <libusb.h>
 
+#include "usb_mock_abi.hpp"
+
 import std;
 
 import viu.device.mock;
@@ -10,10 +12,11 @@ import viu.format;
 import viu.transfer;
 import viu.usb;
 import viu.usb.descriptors;
+import viu.usb.mock.abi;
 
 namespace viu::test {
 
-struct test_device_mock final : usb::mock::interface {
+struct test_device_mock final {
     test_device_mock() = default;
 
     test_device_mock(const test_device_mock&) = delete;
@@ -21,53 +24,60 @@ struct test_device_mock final : usb::mock::interface {
     auto operator=(const test_device_mock&) -> test_device_mock& = delete;
     auto operator=(test_device_mock&&) -> test_device_mock& = delete;
 
-    void on_transfer_request(usb::transfer::control xfer) override
+    void on_transfer_request(viu_usb_mock_transfer_control_opaque xfer)
     {
-        const auto ep = xfer.ep() & 0x0f;
+        const auto ep = xfer.ep(xfer.ctx) & 0x0f;
 
-        if (xfer.is_in()) {
-            xfer.fill(ep_data_[ep]);
-        } else if (xfer.is_out()) {
-            ep_data_[ep] = xfer.read();
+        if (xfer.is_in(xfer.ctx)) {
+            xfer.fill(xfer.ctx, ep_data_[ep].data(), ep_data_[ep].size());
+        } else if (xfer.is_out(xfer.ctx)) {
+            const auto size = xfer.size(xfer.ctx);
+            auto read_buffer = usb::transfer::buffer_type(size);
+            xfer.read(xfer.ctx, read_buffer.data(), 0);
+            ep_data_[ep] = read_buffer;
         }
 
-        xfer.complete();
+        xfer.complete(xfer.ctx);
     }
 
-    auto on_control_setup(
-        [[maybe_unused]] const libusb_control_setup& setup,
-        [[maybe_unused]] const std::vector<std::uint8_t>& data
-    ) -> std::expected<std::vector<std::uint8_t>, int> override
+    int on_control_setup(
+        [[maybe_unused]] libusb_control_setup setup,
+        [[maybe_unused]] const std::uint8_t* data,
+        [[maybe_unused]] std::size_t data_size,
+        [[maybe_unused]] std::uint8_t* out,
+        [[maybe_unused]] std::size_t* out_size
+    )
     {
-        return std::unexpected{LIBUSB_ERROR_NOT_SUPPORTED};
+        return LIBUSB_ERROR_NOT_SUPPORTED;
     }
 
-    auto on_set_configuration([[maybe_unused]] std::uint8_t index)
-        -> int override
+    int on_set_configuration([[maybe_unused]] std::uint8_t index)
     {
         return LIBUSB_SUCCESS;
     }
 
-    auto on_set_interface(
+    int on_set_interface(
         [[maybe_unused]] std::uint8_t interface,
         [[maybe_unused]] std::uint8_t alt_setting
-    ) -> int override
+    )
     {
         return LIBUSB_SUCCESS;
     }
 
-    auto interval() const -> std::chrono::milliseconds override
+    std::uint64_t tick_interval() const
     {
-        return std::chrono::milliseconds{0};
+        return std::chrono::milliseconds{0}.count();
     }
 
-    void tick() override { EXPECT_TRUE(false); }
+    void tick() { EXPECT_TRUE(false); }
 
 private:
     std::array<std::vector<std::uint8_t>, 15> ep_data_{};
 };
 
 static_assert(!std::copyable<test_device_mock>);
+
+REGISTER_USB_MOCK(test_device_mock_plugin, test_device_mock)
 
 struct host final {
     host()
@@ -244,10 +254,10 @@ struct device final {
     {
         t_ = std::jthread{[this](const std::stop_token& stoken) {
             load_descriptor_tree();
-            auto mock = std::make_shared<test_device_mock>();
+
             [[maybe_unused]] auto mock_device = viu::device::mock{
                 descriptor_tree_,
-                std::static_pointer_cast<test_device_mock>(mock)
+                test_device_mock_plugin_create()
             };
 
             while (!stoken.stop_requested()) {

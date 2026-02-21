@@ -34,7 +34,7 @@ def build_boost():
         "cxxflags=-stdlib=libc++",
         "cxxflags=-fPIC",
         "linkflags=-stdlib=libc++",
-        "link=shared",
+        "link=static",
         "threading=multi",
         "install",
         f"--prefix={install}",
@@ -131,10 +131,6 @@ def build_viud(enable_tidy, enable_format, build_type, enable_coverage):
         run(["./cmake4", "--build", build, "--target", "format"])
 
     symlink(os.path.join(build, "viud"), os.path.join(ROOT_DIR, "cli"))
-    symlink(
-        os.path.join(ROOT_DIR, "src", "test", "test_device_config.json"),
-        os.path.join(ROOT_DIR, "test_device_config.json")
-    )
 
 
 def build_mouse_example(enable_tidy, enable_format, build_type):
@@ -164,6 +160,21 @@ def build_mouse_example(enable_tidy, enable_format, build_type):
 def build_all(enable_tidy, enable_format, build_type, enable_coverage):
     build_viud(enable_tidy, enable_format, build_type, enable_coverage)
     build_mouse_example(enable_tidy, enable_format, build_type)
+
+
+def build_and_run_gtest():
+    build = os.path.join(ROOT_DIR, "out", "build", "viu")
+    config = os.path.join(ROOT_DIR, "src", "test", "test_device_config.json")
+    config_out = os.path.join(build, "src", "test", "test_device_config.json")
+
+    run(["./cmake4", "--build", build, "--target", "viu-gtest"])
+    run(["cp", config, os.path.join(build, "src", "test", config_out)])
+    run([
+        "sudo",
+        "ctest",
+        "--test-dir", os.path.join(build, "src", "test"),
+        "--output-on-failure"
+    ])
 
 
 def uninstall_service():
@@ -251,7 +262,7 @@ def main():
         choices=["ON", "OFF"]
     )
 
-
+    sub.add_parser("test", help="Build and run tests")
     sub.add_parser("install", help="install systemd service")
     sub.add_parser("uninstall", help="remove systemd service")
 
@@ -280,6 +291,8 @@ def main():
             args.build_type,
             args.coverage
         )
+    elif args.cmd == "test":
+        build_and_run_gtest()
     elif args.cmd == "install":
         install_service()
     elif args.cmd == "uninstall":

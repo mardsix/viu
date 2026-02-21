@@ -32,21 +32,21 @@ endif()
 
 option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 
-if (ENABLE_COVERAGE)
+if(ENABLE_COVERAGE)
     message(STATUS "Coverage instrumentation enabled for tests")
 
     target_compile_options(${TEST_EXECUTABLE_NAME}
         PRIVATE
-            -fprofile-arcs
-            -ftest-coverage
-            -fprofile-instr-generate
-            -fcoverage-mapping
+        -fprofile-arcs
+        -ftest-coverage
+        -fprofile-instr-generate
+        -fcoverage-mapping
     )
 
     target_link_options(${TEST_EXECUTABLE_NAME}
         PRIVATE
-            -fprofile-arcs
-            -fprofile-instr-generate
+        -fprofile-arcs
+        -fprofile-instr-generate
     )
 endif()
 
@@ -54,6 +54,9 @@ add_compile_options(-Wall -Wpedantic)
 add_compile_options(-Wno-zero-length-array -Wno-c99-extensions)
 
 include(FetchContent)
+
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+set(INSTALL_GMOCK OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
     googletest
@@ -93,6 +96,7 @@ target_sources(${TEST_EXECUTABLE_NAME}
     ${VIU_TOP_SOURCE_DIR}/src/tickable.cppm
     ${VIU_TOP_SOURCE_DIR}/src/transfer.cppm
     ${VIU_TOP_SOURCE_DIR}/src/types.cppm
+    ${VIU_TOP_SOURCE_DIR}/src/usb_mock_abi.cppm
     ${VIU_TOP_SOURCE_DIR}/src/usb.cppm
     ${VIU_TOP_SOURCE_DIR}/src/usb_basic.cppm
     ${VIU_TOP_SOURCE_DIR}/src/usb_device_proxy.cppm

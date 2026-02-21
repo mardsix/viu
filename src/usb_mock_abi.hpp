@@ -1,0 +1,323 @@
+#ifndef VIU_USB_MOCK_ABI_HPP
+#define VIU_USB_MOCK_ABI_HPP
+
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <type_traits>
+#include <utility>
+
+#include "usb_mock_abi.h"
+
+namespace viu::detail {
+
+template <typename T>
+concept has_on_transfer_request_member =
+    requires(T t, viu_usb_mock_transfer_control_opaque x) {
+        { t.on_transfer_request(x) } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept has_on_transfer_request_static = requires(
+    viu_usb_mock_transfer_control_opaque x
+) {
+    { T::on_transfer_request(x) } -> std::same_as<void>;
+};
+
+template <typename T>
+concept has_on_transfer_complete_member =
+    requires(T t, viu_usb_mock_transfer_control_opaque x) {
+        { t.on_transfer_complete(x) } -> std::same_as<void>;
+    };
+
+template <typename T>
+concept has_on_transfer_complete_static = requires(
+    viu_usb_mock_transfer_control_opaque x
+) {
+    { T::on_transfer_complete(x) } -> std::same_as<void>;
+};
+
+template <typename T>
+concept has_on_control_setup_member = requires(
+    T t,
+    libusb_control_setup s,
+    const uint8_t* data,
+    size_t data_size,
+    uint8_t* out,
+    size_t* out_size
+) {
+    {
+        t.on_control_setup(s, data, data_size, out, out_size)
+    } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_on_control_setup_static = requires(
+    libusb_control_setup s,
+    const uint8_t* data,
+    size_t data_size,
+    uint8_t* out,
+    size_t* out_size
+) {
+    {
+        T::on_control_setup(s, data, data_size, out, out_size)
+    } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_on_set_configuration_member = requires(T t, uint8_t i) {
+    { t.on_set_configuration(i) } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_on_set_configuration_static = requires(uint8_t i) {
+    { T::on_set_configuration(i) } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_on_set_interface_member = requires(T t, uint8_t i, uint8_t a) {
+    { t.on_set_interface(i, a) } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_on_set_interface_static = requires(uint8_t i, uint8_t a) {
+    { T::on_set_interface(i, a) } -> std::same_as<int>;
+};
+
+template <typename T>
+concept has_tick_interval_member = requires(T t) {
+    { t.tick_interval() } -> std::same_as<uint64_t>;
+};
+
+template <typename T>
+concept has_tick_interval_static = requires {
+    { T::tick_interval() } -> std::same_as<uint64_t>;
+};
+
+template <typename T>
+concept has_tick_member = requires(T t) {
+    { t.tick() } -> std::same_as<void>;
+};
+
+template <typename T>
+concept has_tick_static = requires {
+    { T::tick() } -> std::same_as<void>;
+};
+
+template <typename T>
+inline void dispatch_transfer(
+    void* ctx,
+    viu_usb_mock_transfer_control_opaque xfer
+) noexcept
+{
+    try {
+        if constexpr (has_on_transfer_request_static<T>) {
+            T::on_transfer_request(xfer);
+        } else if constexpr (has_on_transfer_request_member<T>) {
+            static_cast<T*>(ctx)->on_transfer_request(xfer);
+        }
+    } catch (...) {
+    }
+}
+
+template <typename T>
+inline void dispatch_transfer_compete(
+    void* ctx,
+    viu_usb_mock_transfer_control_opaque xfer
+) noexcept
+{
+    try {
+        if constexpr (has_on_transfer_complete_static<T>) {
+            T::on_transfer_complete(xfer);
+        } else if constexpr (has_on_transfer_complete_member<T>) {
+            static_cast<T*>(ctx)->on_transfer_complete(xfer);
+        }
+    } catch (...) {
+    }
+}
+
+template <typename T>
+inline int dispatch_control(
+    void* ctx,
+    libusb_control_setup s,
+    const uint8_t* data,
+    size_t data_size,
+    uint8_t* out,
+    size_t* out_size
+) noexcept
+{
+    try {
+        if constexpr (has_on_control_setup_static<T>) {
+            return T::on_control_setup(s, data, data_size, out, out_size);
+        } else if constexpr (has_on_control_setup_member<T>) {
+            return static_cast<T*>(ctx)
+                ->on_control_setup(s, data, data_size, out, out_size);
+        }
+    } catch (...) {
+        return LIBUSB_ERROR_OTHER;
+    }
+
+    return LIBUSB_ERROR_NOT_SUPPORTED;
+}
+
+template <typename T>
+inline int dispatch_set_configuration(void* ctx, uint8_t index) noexcept
+{
+    try {
+        if constexpr (has_on_set_configuration_static<T>) {
+            return T::on_set_configuration(index);
+        } else if constexpr (has_on_set_configuration_member<T>) {
+            return static_cast<T*>(ctx)->on_set_configuration(index);
+        }
+    } catch (...) {
+        return LIBUSB_ERROR_OTHER;
+    }
+
+    return LIBUSB_ERROR_NOT_SUPPORTED;
+}
+
+template <typename T>
+inline int dispatch_set_interface(
+    void* ctx,
+    uint8_t iface,
+    uint8_t alt
+) noexcept
+{
+    try {
+        if constexpr (has_on_set_interface_static<T>) {
+            return T::on_set_interface(iface, alt);
+        } else if constexpr (has_on_set_interface_member<T>) {
+            return static_cast<T*>(ctx)->on_set_interface(iface, alt);
+        }
+    } catch (...) {
+        return LIBUSB_ERROR_OTHER;
+    }
+
+    return LIBUSB_ERROR_NOT_SUPPORTED;
+}
+
+template <typename T>
+inline uint64_t dispatch_tick_interval(void* ctx) noexcept
+{
+    try {
+        if constexpr (has_tick_interval_static<T>) {
+            return T::tick_interval();
+        } else if constexpr (has_tick_interval_member<T>) {
+            return static_cast<T*>(ctx)->tick_interval();
+        }
+    } catch (...) {
+        return 0;
+    }
+}
+
+template <typename T>
+inline void dispatch_tick(void* ctx) noexcept
+{
+    try {
+        if constexpr (has_tick_static<T>) {
+            T::tick();
+        } else if constexpr (has_tick_member<T>) {
+            static_cast<T*>(ctx)->tick();
+        }
+    } catch (...) {
+    }
+}
+
+template <typename T>
+inline void destroy_impl(viu_usb_mock_opaque* self) noexcept
+{
+    try {
+        delete static_cast<T*>(self->ctx);
+        delete self;
+    } catch (...) {
+    }
+}
+
+} // namespace viu::detail
+
+#define REGISTER_USB_MOCK(Name, Type, ...)                                     \
+                                                                               \
+    extern "C" void Name##_on_transfer_request(                                \
+        void* ctx,                                                             \
+        viu_usb_mock_transfer_control_opaque xfer                              \
+    ) noexcept                                                                 \
+    {                                                                          \
+        viu::detail::dispatch_transfer<Type>(ctx, xfer);                       \
+    }                                                                          \
+                                                                               \
+    extern "C" void Name##_on_transfer_complete(                               \
+        void* ctx,                                                             \
+        viu_usb_mock_transfer_control_opaque xfer                              \
+    ) noexcept                                                                 \
+    {                                                                          \
+        viu::detail::dispatch_transfer_compete<Type>(ctx, xfer);               \
+    }                                                                          \
+                                                                               \
+    extern "C" int Name##_on_control_setup(                                    \
+        void* ctx,                                                             \
+        libusb_control_setup s,                                                \
+        const uint8_t* data,                                                   \
+        size_t data_size,                                                      \
+        uint8_t* out,                                                          \
+        size_t* out_size                                                       \
+    ) noexcept                                                                 \
+    {                                                                          \
+        return viu::detail::dispatch_control<Type>(                            \
+            ctx,                                                               \
+            s,                                                                 \
+            data,                                                              \
+            data_size,                                                         \
+            out,                                                               \
+            out_size                                                           \
+        );                                                                     \
+    }                                                                          \
+                                                                               \
+    extern "C" int Name##_on_set_configuration(                                \
+        void* ctx,                                                             \
+        uint8_t index                                                          \
+    ) noexcept                                                                 \
+    {                                                                          \
+        return viu::detail::dispatch_set_configuration<Type>(ctx, index);      \
+    }                                                                          \
+                                                                               \
+    extern "C" int Name##_on_set_interface(                                    \
+        void* ctx,                                                             \
+        uint8_t iface,                                                         \
+        uint8_t alt                                                            \
+    ) noexcept                                                                 \
+    {                                                                          \
+        return viu::detail::dispatch_set_interface<Type>(ctx, iface, alt);     \
+    }                                                                          \
+                                                                               \
+    extern "C" uint64_t Name##_tick_interval(void* ctx) noexcept               \
+    {                                                                          \
+        return viu::detail::dispatch_tick_interval<Type>(ctx);                 \
+    }                                                                          \
+                                                                               \
+    extern "C" void Name##_tick(void* ctx) noexcept                            \
+    {                                                                          \
+        viu::detail::dispatch_tick<Type>(ctx);                                 \
+    }                                                                          \
+                                                                               \
+    extern "C" void Name##_destroy(viu_usb_mock_opaque* self) noexcept         \
+    {                                                                          \
+        delete static_cast<Type*>(self->ctx);                                  \
+        delete self;                                                           \
+    }                                                                          \
+                                                                               \
+    extern "C" viu_usb_mock_opaque* Name##_create() noexcept                   \
+    {                                                                          \
+        auto* self = new viu_usb_mock_opaque{};                                \
+        self->ctx = new Type{__VA_ARGS__};                                     \
+        self->destroy = &Name##_destroy;                                       \
+        self->on_transfer_request = &Name##_on_transfer_request;               \
+        self->on_transfer_complete = &Name##_on_transfer_complete;             \
+        self->on_control_setup = &Name##_on_control_setup;                     \
+        self->on_set_configuration = &Name##_on_set_configuration;             \
+        self->on_set_interface = &Name##_on_set_interface;                     \
+        self->tick_interval = &Name##_tick_interval;                           \
+        self->tick = &Name##_tick;                                             \
+        return self;                                                           \
+    }
+
+#endif /* VIU_USB_MOCK_ABI_HPP */

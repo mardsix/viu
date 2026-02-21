@@ -36,7 +36,7 @@ The USBIP driver must match your running kernel version.
 Fetch the source corresponding to your kernel with:
 
 ```sh
-./viud fetch-usbip --tag <kernel-version>
+./viu fetch-usbip --tag <kernel-version>
 ```
 
 You can check your kernel version with:

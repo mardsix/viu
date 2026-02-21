@@ -15,17 +15,11 @@ set(
 )
 
 set(DAEMON_NAME ${PROJECT_NAME}d)
-set(LIB_NAME ${PROJECT_NAME})
 
 set(APP_MAJOR_VERSION 0)
-set(APP_MINOR_VERSION 2)
-set(APP_PATCH_VERSION 1)
+set(APP_MINOR_VERSION 3)
+set(APP_PATCH_VERSION 0)
 set(APP_PRE_RELEASE_VERSION "alpha")
-
-set(LIB_MAJOR_VERSION 0)
-set(LIB_MINOR_VERSION 2)
-set(LIB_PATCH_VERSION 1)
-set(LIB_PRE_RELEASE_VERSION "alpha")
 
 find_package(Git QUIET)
 
@@ -92,31 +86,33 @@ find_program(CLANG_FORMAT_EXE NAMES "clang-format")
 if(CLANG_FORMAT_EXE)
     add_custom_target(format
         COMMAND ${CLANG_FORMAT_EXE}
-            -i
-            -style=file
-            ${PROJECT_SOURCE_DIR}/*.cpp
-            ${PROJECT_SOURCE_DIR}/src/*.cpp
-            ${PROJECT_SOURCE_DIR}/src/*.cppm
-            ${PROJECT_SOURCE_DIR}/src/*/*.cpp
-            ${PROJECT_SOURCE_DIR}/src/*/*.cppm
+        -i
+        -style=file
+        ${PROJECT_SOURCE_DIR}/*.cpp
+        ${PROJECT_SOURCE_DIR}/src/*.cpp
+        ${PROJECT_SOURCE_DIR}/src/*.cppm
+        ${PROJECT_SOURCE_DIR}/src/*.h
+        ${PROJECT_SOURCE_DIR}/src/*.hpp
+        ${PROJECT_SOURCE_DIR}/src/*/*.cpp
+        ${PROJECT_SOURCE_DIR}/src/*/*.cppm
         COMMENT "Formatting source files"
     )
 endif()
 
 function(enable_sanitizers target type)
-    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         message(FATAL_ERROR "Sanitizers require Clang")
     endif()
 
     set(flags -fno-omit-frame-pointer)
 
-    if (type STREQUAL "asan")
+    if(type STREQUAL "asan")
         list(APPEND flags -fsanitize=address)
-    elseif (type STREQUAL "msan")
+    elseif(type STREQUAL "msan")
         list(APPEND flags -fsanitize=memory -fsanitize-memory-track-origins=2)
-    elseif (type STREQUAL "tsan")
+    elseif(type STREQUAL "tsan")
         list(APPEND flags -fsanitize=thread)
-    elseif (type STREQUAL "ubsan")
+    elseif(type STREQUAL "ubsan")
         list(APPEND flags -fsanitize=undefined)
     else()
         message(FATAL_ERROR "Invalid sanitizer: ${type}")
@@ -131,9 +127,6 @@ add_compile_options(-Wno-zero-length-array -Wno-c99-extensions)
 add_compile_options(-O3 -DBOOST_STACKTRACE_USE_ADDR2LINE)
 
 add_executable(${DAEMON_NAME})
-add_library(${LIB_NAME} SHARED)
-
-target_compile_features(${LIB_NAME} PUBLIC cxx_std_23)
 
 set(VIU_MODULES
     src/assert.cppm
@@ -155,10 +148,12 @@ set(VIU_MODULES
     src/tickable.cppm
     src/transfer.cppm
     src/types.cppm
+    src/usb_mock_abi.cppm
     src/usb.cppm
     src/usb_basic.cppm
     src/usb_device_proxy.cppm
     src/usb_mock.cppm
+    src/usb_mock_abi.cppm
     src/usbip_socket.cppm
     src/vector.cppm
     src/vhci.cppm
@@ -166,8 +161,11 @@ set(VIU_MODULES
     ${CMAKE_BINARY_DIR}/generated/version.cppm
 )
 
-target_sources(${LIB_NAME}
-    PRIVATE
+target_sources(${DAEMON_NAME} PRIVATE
+    main.cpp
+    src/cli/cli_impl.cpp
+    src/client/client_impl.cpp
+    src/daemon/daemon_impl.cpp
     src/assert_impl.cpp
     src/descriptors/usb_descriptors_impl.cpp
     src/json/json_impl.cpp
@@ -178,26 +176,19 @@ target_sources(${LIB_NAME}
     src/usbip_socket_impl.cpp
     src/vhci_impl.cpp
 
-    PUBLIC
-    FILE_SET CXX_MODULES
-    BASE_DIRS ${PROJECT_SOURCE_DIR}
-    FILES
-    ${VIU_MODULES}
-)
-
-target_sources(${DAEMON_NAME} PRIVATE
-    main.cpp
-    src/cli/cli_impl.cpp
-    src/client/client_impl.cpp
-    src/daemon/daemon_impl.cpp
-
     PRIVATE
     FILE_SET CXX_MODULES
     BASE_DIRS ${PROJECT_SOURCE_DIR}
     FILES
+    ${VIU_MODULES}
     src/cli/cli.cppm
     src/client/client.cppm
     src/daemon/daemon.cppm
+
+    PRIVATE
+    FILE_SET HEADERS
+    BASE_DIRS ${PROJECT_SOURCE_DIR}
+    FILES src/usb_mock_abi.h
 )
 
 target_include_directories(${DAEMON_NAME}
@@ -205,51 +196,24 @@ target_include_directories(${DAEMON_NAME}
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
 )
 
-add_dependencies(${DAEMON_NAME} ${LIB_NAME})
-
 include(GNUInstallDirs)
 
-target_include_directories(${LIB_NAME}
-    PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-)
-
-install(FILES ${VIU_MODULES}
+install(FILES
+    src/usb_mock_abi.cppm
+    src/usb_mock_abi.h
+    src/usb_mock_abi.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(TARGETS ${LIB_NAME}
-    EXPORT ${LIB_NAME}Targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(EXPORT ${LIB_NAME}Targets
-    FILE ${LIB_NAME}Targets.cmake
-    NAMESPACE ${LIB_NAME}::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${LIB_NAME}
-)
-
-include(CMakePackageConfigHelpers)
-
-configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in
-    "${CMAKE_CURRENT_BINARY_DIR}/${LIB_NAME}Config.cmake"
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${LIB_NAME}
-)
-
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/${LIB_NAME}Config.cmake"
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${LIB_NAME}
-)
+install(TARGETS ${DAEMON_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if(COV)
     target_compile_options(${DAEMON_NAME}
         PRIVATE
-        -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping
+        -fprofile-arcs
+        -ftest-coverage
+        -fprofile-instr-generate
+        -fcoverage-mapping
     )
 
     target_link_options(${DAEMON_NAME}
@@ -260,13 +224,17 @@ endif(COV)
 
 set(BOOST_ROOT ${CMAKE_SOURCE_DIR}/out/install/boost)
 set(BOOST_LIBRARYDIR ${BOOST_ROOT}/lib)
-#set(Boost_USE_STATIC_LIBS ON)
+set(Boost_USE_STATIC_LIBS ON)
 
-find_package(Boost 1.88.0 REQUIRED)
-find_package(Boost REQUIRED COMPONENTS json)
-find_package(Boost REQUIRED COMPONENTS program_options)
-find_package(Boost REQUIRED COMPONENTS serialization)
-find_package(Boost REQUIRED COMPONENTS thread)
+find_package(
+    Boost 1.88.0
+    REQUIRED
+    COMPONENTS
+    json
+    program_options
+    serialization
+    thread
+)
 
 include_directories(
     include
@@ -276,20 +244,15 @@ include_directories(
 
 target_link_libraries(
     ${DAEMON_NAME}
-    PRIVATE ${LIB_NAME}
     PRIVATE Boost::json
     PRIVATE Boost::program_options
     PRIVATE Boost::serialization
-)
-
-target_link_libraries(
-    ${LIB_NAME}
-    PRIVATE ${CMAKE_SOURCE_DIR}/out/install/libusb/lib/libusb-1.0.a
     PRIVATE Boost::thread
+    PRIVATE ${CMAKE_SOURCE_DIR}/out/install/libusb/lib/libusb-1.0.a
     udev
     systemd
 )
 
-add_subdirectory(src/test)
+add_subdirectory(src/test EXCLUDE_FROM_ALL)
 
-#enable_sanitizers(${DAEMON_NAME} tsan)
+#enable_sanitizers(${DAEMON_NAME} asan)

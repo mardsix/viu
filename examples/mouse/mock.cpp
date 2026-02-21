@@ -3,57 +3,57 @@
 // To run this example using a USB mouse descriptor from a device
 // connected to your machine, execute:
 //
-//   ./cli save -d <vid>:<pid> -f $(pwd)/hid.cfg
-//   ./cli mock -c $(pwd)/hid.cfg \
+//   viud save -d <vid>:<pid> -f $(pwd)/hid.cfg
+//   viud mock -c $(pwd)/hid.cfg \
 //       -m $(pwd)/out/build/examples/mouse/libviumouse-mock.so
 
-#include "libusb.h"
+#include "usb_mock_abi.hpp"
 
-import std;
-
-import viu.boost;
-import viu.device.mock;
-import viu.plugin.factory;
-import viu.plugin.interfaces;
-import viu.tickable;
-import viu.transfer;
-import viu.usb;
-import viu.usb.descriptors;
+#include <algorithm>
+#include <chrono>
+#include <expected>
+#include <functional>
+#include <limits>
+#include <map>
+#include <mutex>
+#include <queue>
+#include <vector>
 
 namespace app {
 
-struct mouse_mock final : viu::usb::mock::interface {
+struct mouse_mock final {
     mouse_mock() = default;
-    ~mouse_mock() { input_.close(); }
-
     mouse_mock(const mouse_mock&) = delete;
     mouse_mock(mouse_mock&&) = delete;
     auto operator=(const mouse_mock&) -> mouse_mock& = delete;
     auto operator=(mouse_mock&&) -> mouse_mock& = delete;
 
-    void on_transfer_request(viu::usb::transfer::control xfer) override
+    void on_transfer_request(viu_usb_mock_transfer_control_opaque xfer)
     {
+        std::lock_guard<std::mutex> lock(input_mutex_);
         input_.push(xfer);
     }
 
-    auto on_control_setup(
-        [[maybe_unused]] const libusb_control_setup& setup,
-        [[maybe_unused]] const std::vector<std::uint8_t>& data
-    ) -> std::expected<std::vector<std::uint8_t>, int> override
+    int on_control_setup(
+        [[maybe_unused]] libusb_control_setup setup,
+        [[maybe_unused]] const std::uint8_t* data,
+        [[maybe_unused]] std::size_t data_size,
+        [[maybe_unused]] std::uint8_t* out,
+        [[maybe_unused]] std::size_t* out_size
+    )
     {
-        return std::unexpected{LIBUSB_ERROR_NOT_SUPPORTED};
+        return LIBUSB_ERROR_NOT_SUPPORTED;
     }
 
-    auto on_set_configuration([[maybe_unused]] const std::uint8_t index)
-        -> int override
+    int on_set_configuration([[maybe_unused]] std::uint8_t index)
     {
         return LIBUSB_SUCCESS;
     }
 
-    auto on_set_interface(
-        [[maybe_unused]] const std::uint8_t interface,
-        [[maybe_unused]] const std::uint8_t alt_setting
-    ) -> int override
+    int on_set_interface(
+        [[maybe_unused]] std::uint8_t interface,
+        [[maybe_unused]] std::uint8_t alt_setting
+    )
     {
         return LIBUSB_SUCCESS;
     }
@@ -79,38 +79,46 @@ struct mouse_mock final : viu::usb::mock::interface {
             a->second();
         }
 
-        auto xfer = viu::usb::transfer::control{};
-        if (auto result = input_.try_pull(xfer);
-            result == boost::concurrent::queue_op_status::success) {
-            xfer.fill(report);
-            xfer.complete();
+        auto xfer = viu_usb_mock_transfer_control_opaque{};
+        {
+            std::lock_guard<std::mutex> lock(input_mutex_);
+            if (!input_.empty()) {
+                xfer = input_.front();
+                input_.pop();
+                xfer.fill(xfer.ctx, report.data(), report.size());
+                xfer.complete(xfer.ctx);
+            }
         }
     }
 
-    std::chrono::milliseconds interval() const override
+    std::uint64_t tick_interval() const
     {
-        return std::chrono::milliseconds{250};
+        return std::chrono::milliseconds{250}.count();
     }
 
-    void tick() override { on_key_input('w'); }
+    void tick() { on_key_input('w'); }
 
 private:
-    boost::sync_queue<viu::usb::transfer::control> input_{};
+    std::queue<viu_usb_mock_transfer_control_opaque> input_;
+    std::mutex input_mutex_;
 };
 
 static_assert(!std::copyable<mouse_mock>);
 
 } // namespace app
 
+REGISTER_USB_MOCK(mouse_mock_plugin, app::mouse_mock)
+
 extern "C" {
-void on_plug(viu::device::plugin::plugin_catalog_api* api)
+
+void on_plug(plugin_catalog_api* api)
 {
     api->set_name(api->ctx, "HID Devices");
     api->set_version(api->ctx, "1.0.0-beta");
 
-    const auto factory = []() -> viu::usb::mock::interface* {
+    const auto factory = []() -> viu_usb_mock_opaque* {
         try {
-            return new app::mouse_mock();
+            return mouse_mock_plugin_create();
         } catch (...) {
             return nullptr;
         }
@@ -120,7 +128,7 @@ void on_plug(viu::device::plugin::plugin_catalog_api* api)
 
     // You can register multiple mock devices, including additional instances
     // of the same type or entirely different devices.
-    // Example: register a second mouse device:
+    // Example:
     // api->register_device(api->ctx, "mouse-2", factory);
 }
 }

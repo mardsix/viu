@@ -1,7 +1,8 @@
-export module viu.plugin.factory;
+export module viu.plugin.catalog;
 
 import std;
 
+import viu.usb.mock.abi;
 import viu.plugin.interfaces;
 import viu.usb;
 
@@ -12,16 +13,12 @@ public:
     void set_name(std::string n) { name_ = std::move(n); }
     void set_version(std::string v) { version_ = std::move(v); }
 
-    using device_factory_fn = viu::usb::mock::interface* (*)();
+    using device_factory_fn = viu_usb_mock_opaque* (*)();
     auto register_device_factory(const std::string& name, device_factory_fn f)
         -> catalog&
     {
-        entries_.push_back(
-            std::make_pair(
-                name,
-                std::shared_ptr<viu::usb::mock::interface>(f())
-            )
-        );
+        viu_usb_mock_opaque* opaque = f();
+        entries_.push_back(std::make_pair(name, opaque));
         return *this;
     }
 
@@ -38,17 +35,15 @@ public:
         return entries_[index].first;
     }
 
-    auto device(const std::string& name) const -> std::
-        expected<std::shared_ptr<viu::usb::mock::interface>, error> override
+    auto device(const std::string& name) const
+        -> std::expected<viu_usb_mock_opaque*, error> override
     {
         const auto it = std::ranges::find_if(entries_, [&name](const auto& p) {
             return p.first == name;
         });
-
         if (it == entries_.end()) {
             return std::unexpected{viu::device::plugin::error::no_device};
         }
-
         return it->second;
     }
 
@@ -60,8 +55,7 @@ public:
     }
 
 private:
-    using entry_type =
-        std::pair<std::string, std::shared_ptr<viu::usb::mock::interface>>;
+    using entry_type = std::pair<std::string, viu_usb_mock_opaque*>;
 
     std::string name_{};
     std::string version_{};

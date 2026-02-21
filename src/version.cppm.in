@@ -46,15 +46,4 @@ export struct app {
     static std::string full() { return make_full<app>(); }
 };
 
-export struct lib {
-    static constexpr std::uint32_t major = @LIB_MAJOR_VERSION@;
-    static constexpr std::uint32_t minor = @LIB_MINOR_VERSION@;
-    static constexpr std::uint32_t patch = @LIB_PATCH_VERSION@;
-
-    static constexpr std::string_view pre_release = "@LIB_PRE_RELEASE_VERSION@";
-    static constexpr std::string_view git_commit = "@GIT_COMMIT@";
-
-    static std::string full() { return make_full<lib>(); }
-};
-
 } // namespace viu::version

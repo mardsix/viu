@@ -1,14 +1,12 @@
-# viu — A virtual USB device library
+# viu - A virtual USB device and proxy tool
 
-viu is a Linux USB device emulation library that allows you to create virtual
-USB devices entirely in software. These emulated devices appear in `lsusb` just
-like physical devices and can be interacted with in the same way, making viu
-useful for testing, development, and debugging.
+**viu** is a Linux tool for USB device emulation and analysis. It allows you to
+create virtual USB devices entirely in software or proxy existing physical
+devices. These devices appear in lsusb just like real hardware.
 
-See the [examples](./examples) directory or
-[`usb_mock_test.cpp`](./src/usb_mock_test.cpp) for usage examples.
-
----
+**viu** is designed to be highly extensible through plugins, which can implement
+new virtual device types, record traffic, inject faults, or perform custom USB
+analysis. This makes it ideal for testing, development, and debugging.
 
 ## Scope & platform
 
@@ -23,9 +21,16 @@ programmable, extensible USB device emulation environment.
 ## Architecture overview
 
 viu consists of:
-- a **core library** that defines USB device and transfer abstractions
-- a **daemon (`viud`)** responsible for device lifecycle and USBIP integration
-- **plugins/extensions** that implement concrete virtual USB devices (e.g. HID)
+
+ - A **daemon** (viud) responsible for managing virtual and proxied USB
+   devices and handling USB transfers.
+ - **Plugins/extensions** that implement concrete virtual USB devices
+   (e.g., HID, mass storage) or provide additional behaviors such as traffic
+   recording, fault injection, or custom analysis.
+
+The daemon handles the core device lifecycle and transfer mechanics, while
+plugins provide flexibility to extend functionality and implement custom
+USB behaviors.
 
 Virtual devices are implemented as shared libraries and loaded dynamically by
 the daemon.
@@ -65,21 +70,17 @@ podman build -t viu .
 
 ### Bootstrap
 ```sh
-# In the Docker container, may need to:
-# sudo mkdir -p /lib/share/libc++
-# sudo ln -s /usr/lib/llvm-21/share/libc++/v1 /lib/share/libc++/v1
-
-podman run --rm -i -v "$PWD":"$PWD" -w "$PWD" viu ./viud bootstrap
+podman run --rm -i -v "$PWD":"$PWD" -w "$PWD" viu ./viu bootstrap
 ```
 
 ### Build viu library and daemon
 ```sh
-podman run --rm -i -v "$PWD":"$PWD" -w "$PWD" viu ./viud build
+podman run --rm -i -v "$PWD":"$PWD" -w "$PWD" viu ./viu build
 ```
 
 ### Install the daemon
 ```sh
-./viud install
+./viu install
 ```
 
 ### Run USB mouse emulation example

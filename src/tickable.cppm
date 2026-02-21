@@ -3,15 +3,9 @@ export module viu.tickable;
 import std;
 
 import viu.boost;
+import viu.usb.mock.abi;
 
 namespace viu {
-
-export struct tickable {
-    virtual ~tickable() = default;
-
-    virtual auto interval() const -> std::chrono::milliseconds = 0;
-    virtual void tick() = 0;
-};
 
 export class tick_service final {
 public:
@@ -23,10 +17,10 @@ public:
     auto operator=(const tick_service&) -> tick_service& = delete;
     auto operator=(tick_service&&) -> tick_service& = delete;
 
-    void add(const std::shared_ptr<viu::tickable>& obj)
+    void add(viu_usb_mock_opaque* opaque)
     {
         std::scoped_lock lock(mutex_);
-        tickables_.push_back(obj);
+        opaque_tickables_.push_back(opaque);
     }
 
     void start()
@@ -54,26 +48,31 @@ private:
         while (!st.stop_requested()) {
             {
                 std::scoped_lock lock(mutex_);
-                for (auto& tickable_obj : tickables_) {
-                    if (tickable_obj == nullptr) {
+
+                for (auto& opaque_obj : opaque_tickables_) {
+                    if (opaque_obj == nullptr ||
+                        opaque_obj->tick_interval == nullptr ||
+                        opaque_obj->tick == nullptr) {
                         continue;
                     }
 
-                    const auto interval = tickable_obj->interval();
+                    const auto interval = std::chrono::milliseconds{
+                        opaque_obj->tick_interval(opaque_obj->ctx)
+                    };
                     if (interval.count() == 0) {
                         continue;
                     }
 
                     const auto now = std::chrono::steady_clock::now();
-                    const auto last_tick = last_tick_time_[tickable_obj.get()];
+                    const auto last_tick = opaque_last_tick_time_[opaque_obj];
                     const auto elapsed =
                         std::chrono::duration_cast<std::chrono::milliseconds>(
                             now - last_tick
                         );
 
                     if (elapsed >= interval) {
-                        tickable_obj->tick();
-                        last_tick_time_[tickable_obj.get()] = now;
+                        opaque_obj->tick(opaque_obj->ctx);
+                        opaque_last_tick_time_[opaque_obj] = now;
                     }
                 }
             }
@@ -82,9 +81,10 @@ private:
         }
     }
 
-    std::vector<std::shared_ptr<viu::tickable>> tickables_;
-    std::map<viu::tickable*, std::chrono::steady_clock::time_point>
-        last_tick_time_;
+    std::vector<viu_usb_mock_opaque*> opaque_tickables_;
+    std::map<viu_usb_mock_opaque*, std::chrono::steady_clock::time_point>
+        opaque_last_tick_time_;
+
     std::mutex mutex_;
     std::jthread worker_;
 };

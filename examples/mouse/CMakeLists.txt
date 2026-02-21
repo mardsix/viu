@@ -61,22 +61,7 @@ target_sources(${PROXY_LIB_NAME}
     proxy.cpp
 )
 
-set(BOOST_ROOT ${CMAKE_SOURCE_DIR}/../../out/install/boost)
-find_package(Boost REQUIRED COMPONENTS thread)
-
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/../../out/install/viu")
-find_package(viu REQUIRED)
-
 include_directories(
-    ${CMAKE_SOURCE_DIR}/../../out/install/libusb/include/libusb-1.0
-)
-
-target_link_libraries(
-    ${MOCK_LIB_NAME}
-    PRIVATE viu::viu
-)
-
-target_link_libraries(
-    ${PROXY_LIB_NAME}
-    PRIVATE viu::viu
+    "${CMAKE_SOURCE_DIR}/../../out/install/libusb/include/libusb-1.0"
+    "${CMAKE_SOURCE_DIR}/../../out/install/viu/include"
 )

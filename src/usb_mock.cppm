@@ -3,6 +3,7 @@ export module viu.device.mock;
 import std;
 
 import viu.usb;
+import viu.usb.mock.abi;
 import viu.device.proxy;
 import viu.usb.descriptors;
 
@@ -12,9 +13,11 @@ export class mock : public proxy {
 public:
     mock(
         usb::descriptor::tree descriptor_tree,
-        std::shared_ptr<usb::mock::interface> xfer_iface
+        viu_usb_mock_opaque* xfer_instance
     )
-        : proxy{std::make_shared<viu::usb::mock>(descriptor_tree, xfer_iface)}
+        : proxy{
+              std::make_shared<viu::usb::mock>(descriptor_tree, xfer_instance)
+          }
     {
     }
 };

@@ -10,9 +10,21 @@ import viu.error;
 import viu.tickable;
 import viu.transfer;
 import viu.types;
+
+import viu.usb.mock.abi;
 import viu.usb.descriptors;
 
 namespace viu::usb {
+
+struct mock_opaque_deleter {
+    void operator()(viu_usb_mock_opaque* ptr) const noexcept
+    {
+        if (ptr != nullptr && ptr->destroy != nullptr) {
+            ptr->destroy(ptr);
+        }
+    }
+};
+
 template <typename T>
 concept string_unit = std::same_as<T, std::uint8_t> ||
                       std::same_as<T, std::uint16_t>;
@@ -41,30 +53,12 @@ public:
     using device_handle_pointer =
         viu::type::unique_pointer_t<libusb_device_handle>;
 
-    struct interface : public viu::tickable {
-        virtual ~interface() = default;
-
-        virtual void on_transfer_request(transfer::control xfer) = 0;
-
-        virtual auto on_control_setup(
-            const libusb_control_setup& setup,
-            const std::vector<std::uint8_t>& data
-        ) -> std::expected<std::vector<std::uint8_t>, int> = 0;
-
-        virtual auto on_set_configuration(std::uint8_t index) -> int = 0;
-
-        virtual auto on_set_interface(
-            std::uint8_t interface,
-            std::uint8_t alt_setting
-        ) -> int = 0;
-    };
-
     device() = default;
 
     device(
         std::uint32_t vid,
         std::uint32_t pid,
-        std::shared_ptr<interface> xfer_iface = nullptr
+        viu_usb_mock_opaque* xfer_instance = nullptr
     );
 
     virtual ~device();
@@ -102,6 +96,8 @@ public:
     void submit_bulk_transfer(const transfer::info& transfer_info);
     void submit_interrupt_transfer(const transfer::info& transfer_info);
     void submit_iso_transfer(const transfer::info& transfer_info);
+
+    void on_transfer_completed(viu_usb_mock_transfer_control_opaque xfer);
 
     [[nodiscard]] virtual auto submit_control_setup(
         const libusb_control_setup& setup,
@@ -169,7 +165,7 @@ private:
     usb::transfer::callback cb_{};
 
 protected:
-    std::shared_ptr<interface> xfer_iface_{};
+    std::shared_ptr<viu_usb_mock_opaque> xfer_instance_{};
     usb::descriptor::tree descriptor_tree_{};
 };
 
@@ -177,15 +173,16 @@ static_assert(!std::copyable<device>);
 
 export class mock : public device {
 public:
-    using interface = device::interface;
-
     explicit mock(
         usb::descriptor::tree descriptor_tree,
-        std::shared_ptr<interface> xfer_cb
+        viu_usb_mock_opaque* xfer_instance
     )
     {
         descriptor_tree_ = std::move(descriptor_tree);
-        xfer_iface_ = xfer_cb;
+        xfer_instance_ = std::shared_ptr<viu_usb_mock_opaque>{
+            xfer_instance,
+            mock_opaque_deleter{}
+        };
     }
 
     [[nodiscard]] auto set_configuration(std::uint8_t index) -> int override;

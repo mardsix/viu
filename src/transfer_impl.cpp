@@ -47,11 +47,11 @@ void callback::on_transfer_completed_impl(libusb_transfer* const transfer)
         auto it = pending_transfers_.find(transfer);
         viu::_assert(it != pending_transfers_.end());
 
-        auto callback = it->second;
+        auto callback_func = it->second.callback;
         pending_transfers_.erase(it);
 
         lock.unlock();
-        callback(give_away_transfer(transfer));
+        callback_func(give_away_transfer(transfer));
     }
 }
 
@@ -62,13 +62,17 @@ void LIBUSB_CALL on_transfer_completed(libusb_transfer* const transfer)
     self->on_transfer_completed_impl(transfer);
 }
 
-void callback::attach(const type& cb, libusb_transfer* const transfer)
+void callback::attach(
+    const type& cb,
+    control ctrl,
+    libusb_transfer* const transfer
+)
 {
     transfer->user_data = this;
 
     {
         [[maybe_unused]] const std::unique_lock _(mutex_);
-        auto r = pending_transfers_.insert({transfer, cb});
+        auto r = pending_transfers_.insert({transfer, {cb, ctrl}});
         viu::_assert(r.second);
     }
 }
@@ -171,6 +175,16 @@ void callback::submit(
 
     const auto res = libusb_submit_transfer(transfer);
     viu::_assert(res == LIBUSB_SUCCESS);
+}
+
+auto callback::get_control(libusb_transfer* transfer) -> control*
+{
+    std::shared_lock lock(mutex_);
+    auto it = pending_transfers_.find(transfer);
+    if (it != pending_transfers_.end()) {
+        return &(it->second.control_obj);
+    }
+    return nullptr;
 }
 
 auto iso_data(const usb::transfer::pointer& transfer)
@@ -392,7 +406,7 @@ auto control::read(std::optional<std::uint32_t> size)
 {
     viu::_assert(xfer_ != nullptr);
 
-    const auto read_size = size.value_or(xfer_->length);
+    const auto read_size = size.value_or(this->size());
     viu::_assert(read_size <= xfer_->length);
 
     xfer_->actual_length = read_size;
@@ -414,7 +428,7 @@ auto control::size() const -> int
     return xfer_->length;
 }
 
-auto control::type() const
+auto control::type() const -> unsigned char
 {
     viu::_assert(xfer_ != nullptr);
     return xfer_->type;
@@ -429,7 +443,7 @@ auto control::ep() const -> std::uint8_t
 void control::attach(const callback::type& cb, callback& cbs)
 {
     viu::_assert(xfer_ != nullptr);
-    cbs.attach(cb, xfer_);
+    cbs.attach(cb, *this, xfer_);
 }
 
 void control::submit(const usb::device::context_pointer& ctx, callback& cbs)

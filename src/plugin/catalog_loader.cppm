@@ -7,9 +7,10 @@ export module viu.plugin.loader;
 import std;
 
 import viu.assert;
+import viu.usb.mock.abi;
 import viu.plugin.interfaces;
 import viu.usb;
-import viu.plugin.factory;
+import viu.plugin.catalog;
 
 export namespace viu::device::plugin {
 
@@ -65,7 +66,7 @@ public:
     }
 
     auto device(const std::string& name)
-        -> std::expected<std::shared_ptr<viu::usb::mock::interface>, error>
+        -> std::expected<viu_usb_mock_opaque*, error>
     {
         return catalog()->device(name);
     }
@@ -123,14 +124,12 @@ public:
     }
 
     auto device(const std::string& catalog_name, const std::string& device_name)
-        -> std::expected<std::shared_ptr<viu::usb::mock::interface>, error>
+        -> std::expected<viu_usb_mock_opaque*, error>
     {
         const auto it = plugins_.find(catalog_name);
-
         if (it == plugins_.end()) {
             return std::unexpected(error::no_device);
         }
-
         return it->second.device(device_name);
     }
 

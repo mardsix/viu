@@ -14,27 +14,6 @@ namespace viu::usb::transfer {
 using deleter_type = std::function<void(libusb_transfer*)>;
 export using pointer = std::unique_ptr<libusb_transfer, deleter_type>;
 
-export struct callback {
-    using type = std::function<void(transfer::pointer)>;
-    using id_type = libusb_transfer*;
-    using context_type = void*;
-
-    void attach(const type& cb, libusb_transfer* const transfer);
-    void submit(
-        const viu::type::unique_pointer_t<libusb_context>& ctx,
-        libusb_transfer* transfer
-    );
-    void cancel();
-    void on_transfer_completed_impl(libusb_transfer* transfer);
-
-private:
-    void wait_for_canceled_transfers();
-
-    std::shared_mutex mutex_;
-    std::map<id_type, type> pending_transfers_;
-    std::atomic_bool transfers_canceled_;
-};
-
 export using buffer_type = std::vector<std::uint8_t>;
 
 export struct iso {
@@ -45,7 +24,7 @@ export struct iso {
 export struct info {
     std::uint8_t ep_address{};
     buffer_type buffer{};
-    callback::type callback{};
+    std::function<void(transfer::pointer)> callback{};
     std::optional<iso> iso{};
 };
 
@@ -85,17 +64,52 @@ export struct control {
     [[nodiscard]] auto read(std::optional<std::uint32_t> size = std::nullopt)
         -> transfer::buffer_type const;
     [[nodiscard]] auto size() const -> int;
-    [[nodiscard]] auto type() const;
+    [[nodiscard]] auto type() const -> unsigned char;
     [[nodiscard]] auto ep() const -> std::uint8_t;
-    void attach(const callback::type& cb, callback& cbs);
+
+    void attach(
+        const std::function<void(transfer::pointer)>& cb,
+        struct callback& cbs
+    );
     void submit(
         const viu::type::unique_pointer_t<libusb_context>& ctx,
-        callback& cbs
+        struct callback& cbs
     );
+    [[nodiscard]] auto underlying_transfer() const -> libusb_transfer*
+    {
+        return xfer_;
+    }
 
 private:
     static constexpr std::uint8_t direction_mask = 1 << 7;
     libusb_transfer* xfer_{};
+};
+
+export struct callback {
+    using type = std::function<void(transfer::pointer)>;
+    using id_type = libusb_transfer*;
+    using context_type = void*;
+
+    void attach(const type& cb, control ctrl, libusb_transfer* const transfer);
+    void submit(
+        const viu::type::unique_pointer_t<libusb_context>& ctx,
+        libusb_transfer* transfer
+    );
+    void cancel();
+    void on_transfer_completed_impl(libusb_transfer* transfer);
+    auto get_control(libusb_transfer* transfer) -> control*;
+
+private:
+    struct pending_transfer_data {
+        type callback;
+        control control_obj;
+    };
+
+    void wait_for_canceled_transfers();
+
+    std::shared_mutex mutex_;
+    std::map<id_type, pending_transfer_data> pending_transfers_;
+    std::atomic_bool transfers_canceled_;
 };
 
 export control fill_bulk(

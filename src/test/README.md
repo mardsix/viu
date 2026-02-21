@@ -2,7 +2,7 @@
 
 ## Unit tests and coverage report
 ```sh
-sudo out/build/viu/src/test/viu-gtest
+sudo ./viu test
 llvm-profdata merge -sparse default.profraw -o viu.profdata
 ```
 

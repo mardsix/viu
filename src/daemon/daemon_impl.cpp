@@ -241,8 +241,7 @@ auto service::app_mock(
             std::make_unique<viu::device::mock>(dev_desc, *vd)
         );
 
-        auto tickable_ptr = std::static_pointer_cast<viu::tickable>(*vd);
-        tick_service_.add(tickable_ptr);
+        tick_service_.add(*vd);
     }
 
     std::println(ss, "Mock devices started successfully");
@@ -252,8 +251,7 @@ auto service::app_mock(
 auto service::app_version() -> viu::response
 {
     auto ss = std::stringstream{};
-    std::println(ss, "Service version: {}", version::app::full());
-    std::println(ss, "Library version: {}", version::lib::full());
+    std::println(ss, "{}", version::app::full());
     return viu::response::success(ss.str());
 }
 

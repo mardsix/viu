@@ -7,7 +7,7 @@ import viu.cli;
 import viu.device.mock;
 import viu.device.proxy;
 import viu.error;
-import viu.plugin.factory;
+import viu.plugin.catalog;
 import viu.plugin.loader;
 import viu.tickable;
 import viu.usb.descriptors;
