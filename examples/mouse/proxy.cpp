@@ -11,6 +11,10 @@
 //   "data": "00010203"
 // }
 
+// viud proxydev -d <vid>:<pid> \
+//     -m $(pwd)/out/build/examples/mouse/libviumouse-proxy.so
+//
+
 // Use the provided `parse_transfers.py` script to analyze the recorded
 // transfers:
 //

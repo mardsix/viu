@@ -8,6 +8,9 @@ devices. These devices appear in lsusb just like real hardware.
 new virtual device types, record traffic, inject faults, or perform custom USB
 analysis. This makes it ideal for testing, development, and debugging.
 
+See the [examples](./examples) directory or
+[`usb_mock_test.cpp`](./src/usb_mock_test.cpp) for usage examples.
+
 ## Scope & platform
 
 - **Platform:** Linux only

@@ -12,7 +12,7 @@ import viu.usb;
 
 namespace viu::usb::transfer {
 
-const auto timeout = std::chrono::seconds{10};
+const auto timeout = std::chrono::seconds{0};
 
 namespace {
 
@@ -409,13 +409,15 @@ auto control::read(std::optional<std::uint32_t> size)
     const auto read_size = size.value_or(this->size());
     viu::_assert(read_size <= xfer_->length);
 
-    xfer_->actual_length = read_size;
+    if (is_out()) {
+        xfer_->actual_length = read_size;
 
-    if (transfer::is_iso(xfer_)) {
-        libusb_iso_packet_descriptor* ipd = xfer_->iso_packet_desc;
-        for (auto i = 0; i < xfer_->num_iso_packets; ++i) {
-            ipd->actual_length = ipd->length;
-            ipd++;
+        if (transfer::is_iso(xfer_)) {
+            libusb_iso_packet_descriptor* ipd = xfer_->iso_packet_desc;
+            for (auto i = 0; i < xfer_->num_iso_packets; ++i) {
+                ipd->actual_length = ipd->length;
+                ipd++;
+            }
         }
     }
 

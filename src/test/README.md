@@ -2,7 +2,7 @@
 
 ## Unit tests and coverage report
 ```sh
-sudo ./viu test
+./viu test
 llvm-profdata merge -sparse default.profraw -o viu.profdata
 ```
 

@@ -15,9 +15,11 @@ set(
 
 set(MOCK_LIB_NAME ${PROJECT_NAME}-mock)
 set(PROXY_LIB_NAME ${PROJECT_NAME}-proxy)
+set(PLAYBACK_LIB_NAME ${PROJECT_NAME}-playback)
 
 add_library(${MOCK_LIB_NAME} SHARED)
 add_library(${PROXY_LIB_NAME} SHARED)
+add_library(${PLAYBACK_LIB_NAME} SHARED)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 
@@ -59,6 +61,11 @@ target_sources(${MOCK_LIB_NAME}
 target_sources(${PROXY_LIB_NAME}
     PRIVATE
     proxy.cpp
+)
+
+target_sources(${PLAYBACK_LIB_NAME}
+    PRIVATE
+    playback.cpp
 )
 
 include_directories(
