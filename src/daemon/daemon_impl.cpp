@@ -19,7 +19,6 @@ import viu.device.mock;
 import viu.device.proxy;
 import viu.io;
 import viu.plugin.loader;
-import viu.tickable;
 import viu.usb;
 import viu.usb.descriptors;
 import viu.version;
@@ -126,47 +125,93 @@ auto service::check_cli_params(
     return {};
 }
 
+void service::create_mock_device_from_catalog(
+    const std::filesystem::path& catalog_path,
+    const std::string& device_name,
+    const viu::usb::descriptor::tree& dev_desc
+)
+{
+    auto vd =
+        virtual_device_manager_.device(catalog_path.string(), device_name);
+
+    viu::_assert(vd && *vd != nullptr);
+
+    const auto vid = dev_desc.device_descriptor().idVendor;
+    const auto pid = dev_desc.device_descriptor().idProduct;
+    const auto id = device_id_counter_.fetch_add(1, std::memory_order_relaxed);
+    virtual_devices_.emplace(
+        id,
+        device_info{
+            vid,
+            pid,
+            std::make_unique<viu::device::mock>(dev_desc, *vd)
+        }
+    );
+}
+
+void service::create_proxy_device_from_catalog(
+    std::uint32_t vid,
+    std::uint32_t pid,
+    const std::filesystem::path& catalog_path,
+    const std::string& device_name
+)
+{
+    auto vd =
+        virtual_device_manager_.device(catalog_path.string(), device_name);
+    viu::_assert(vd && *vd != nullptr);
+
+    const auto device = std::make_shared<viu::usb::device>(vid, pid, *vd);
+    const auto id = device_id_counter_.fetch_add(1, std::memory_order_relaxed);
+    virtual_devices_.emplace(
+        id,
+        device_info{vid, pid, std::make_unique<viu::device::proxy>(device)}
+    );
+}
+
 auto service::app_proxy(
-    const std::uint32_t vid,
-    const std::uint32_t pid,
+    std::uint32_t vid,
+    std::uint32_t pid,
     const std::filesystem::path& catalog_path
 ) -> viu::response
 {
     if (catalog_path.empty()) {
         const auto device = std::make_shared<viu::usb::device>(vid, pid);
-        proxy_devices_.emplace_back(
-            std::make_unique<viu::device::proxy>(device)
+        const auto id =
+            device_id_counter_.fetch_add(1, std::memory_order_relaxed);
+        virtual_devices_.emplace(
+            id,
+            device_info{vid, pid, std::make_unique<viu::device::proxy>(device)}
         );
 
         return viu::response::success("Proxy device created successfully");
     }
 
-    const auto plugin_factory = virtual_device_manager_.register_catalog(
+    const auto register_result = virtual_device_manager_.register_catalog(
         catalog_path.string()
     );
+
+    if (!register_result) {
+        return viu::response::failure(
+            std::string(register_result.error().message()),
+            register_result.error()
+        );
+    }
+
+    const auto plugin_factory = *register_result;
     viu::_assert(plugin_factory != nullptr);
 
     auto ss = std::stringstream{};
-    std::println(ss, "Catalog Information:");
-    std::println(ss, "  Name: {}", plugin_factory->name());
-    std::println(ss, "  Version: {}", plugin_factory->version());
-    std::println(
-        ss,
-        "  Number of devices: {}",
-        plugin_factory->number_of_devices()
-    );
+    viu::device::plugin::print_catalog_info(ss, plugin_factory);
 
     // TODO: support multiple devices
     viu::_assert(plugin_factory->number_of_devices() == 1);
 
-    auto vd = virtual_device_manager_.device(
-        catalog_path.string(),
+    create_proxy_device_from_catalog(
+        vid,
+        pid,
+        catalog_path,
         plugin_factory->device_name(0)
     );
-    viu::_assert(vd && *vd != nullptr);
-
-    const auto device = std::make_shared<viu::usb::device>(vid, pid, *vd);
-    proxy_devices_.emplace_back(std::make_unique<viu::device::proxy>(device));
 
     std::println(
         ss,
@@ -178,8 +223,8 @@ auto service::app_proxy(
 }
 
 auto service::app_save_config(
-    const std::uint32_t vid,
-    const std::uint32_t pid,
+    std::uint32_t vid,
+    std::uint32_t pid,
     const std::filesystem::path& path
 ) -> viu::response
 {
@@ -189,8 +234,8 @@ auto service::app_save_config(
 }
 
 auto service::app_save_hid_report(
-    const std::uint32_t vid,
-    const std::uint32_t pid,
+    std::uint32_t vid,
+    std::uint32_t pid,
     const std::filesystem::path& path
 ) -> viu::response
 {
@@ -207,44 +252,56 @@ auto service::app_mock(
     auto dev_desc = viu::usb::descriptor::tree{};
     dev_desc.load(device_config_path);
 
-    const auto plugin_factory = virtual_device_manager_.register_catalog(
+    const auto register_result = virtual_device_manager_.register_catalog(
         catalog_path.string()
     );
+
+    if (!register_result) {
+        return viu::response::failure(
+            std::string(register_result.error().message()),
+            register_result.error()
+        );
+    }
+
+    const auto plugin_factory = *register_result;
     viu::_assert(plugin_factory != nullptr);
 
     auto ss = std::stringstream{};
-    std::println(ss, "Catalog Information:");
-    std::println(ss, "  Name: {}", plugin_factory->name());
-    std::println(ss, "  Version: {}", plugin_factory->version());
-    std::println(
-        ss,
-        "  Number of devices: {}",
-        plugin_factory->number_of_devices()
-    );
-    std::println(
-        ss,
-        "Devices exported by '{}' catalog:",
-        plugin_factory->name()
-    );
+    viu::device::plugin::print_catalog_info(ss, plugin_factory);
 
     for (std::size_t n = 0; n < plugin_factory->number_of_devices(); n++) {
-        std::println(ss, " Name: {}", plugin_factory->device_name(n));
-
-        auto vd = virtual_device_manager_.device(
-            catalog_path.string(),
-            plugin_factory->device_name(n)
+        create_mock_device_from_catalog(
+            catalog_path,
+            plugin_factory->device_name(n),
+            dev_desc
         );
-
-        viu::_assert(vd && *vd != nullptr);
-
-        mock_devices_.emplace_back(
-            std::make_unique<viu::device::mock>(dev_desc, *vd)
-        );
-
-        tick_service_.add(*vd);
     }
 
     std::println(ss, "Mock devices started successfully");
+    return viu::response::success(ss.str());
+}
+
+auto service::app_list_catalogs() -> viu::response
+{
+    auto ss = std::stringstream{};
+    virtual_device_manager_.list_catalogs(ss);
+    return viu::response::success(ss.str());
+}
+
+auto service::app_plug(
+    const std::filesystem::path& config_path,
+    const std::filesystem::path& catalog_path,
+    const std::string& device_name
+) -> viu::response
+{
+    auto dev_desc = viu::usb::descriptor::tree{};
+    dev_desc.load(config_path);
+
+    create_mock_device_from_catalog(catalog_path, device_name, dev_desc);
+
+    auto ss = std::stringstream{};
+    std::println(ss, "Device '{}' plugged successfully", device_name);
+
     return viu::response::success(ss.str());
 }
 
@@ -253,6 +310,38 @@ auto service::app_version() -> viu::response
     auto ss = std::stringstream{};
     std::println(ss, "{}", version::app::full());
     return viu::response::success(ss.str());
+}
+
+auto service::app_list() -> viu::response
+{
+    auto ss = std::stringstream{};
+    std::println(ss, "Connected Devices:");
+
+    if (virtual_devices_.empty()) {
+        std::println(ss, "  No devices connected");
+    } else {
+        for (const auto& [id, info] : virtual_devices_) {
+            std::println(ss, "  id: {}, {:04x}:{:04x}", id, info.vid, info.pid);
+        }
+    }
+
+    return viu::response::success(ss.str());
+}
+
+auto service::app_unplug(std::uint64_t device_id) -> viu::response
+{
+    auto it = virtual_devices_.find(device_id);
+    if (it == virtual_devices_.end()) {
+        auto ss = std::stringstream{};
+        std::println(ss, "Device with id {} not found", device_id);
+        return viu::response::failure(
+            ss.str(),
+            viu::make_error(error::invalid_argument, "Device not found").error()
+        );
+    }
+
+    virtual_devices_.erase(it);
+    return viu::response::success("Device unplugged successfully");
 }
 
 auto service::run_proxydev_command(const std::span<const char*>& args)
@@ -411,10 +500,130 @@ auto service::run_mock_command(const std::span<const char*>& args)
     return app_mock(device_config_path, catalog_path);
 }
 
+auto service::run_list_catalogs_command(const std::span<const char*>& args)
+    -> viu::response
+{
+    namespace po = boost::program_options;
+    auto desc = po::options_description{"List registered catalogs"};
+    // clang-format off
+    desc.add_options()
+    ("help,h", "Show this message");
+    // clang-format on
+
+    const auto vm = parse_command(args, desc);
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
+        desc.print(ss);
+        return viu::response::success(ss.str());
+    }
+
+    return app_list_catalogs();
+}
+
+auto service::run_plug_command(const std::span<const char*>& args)
+    -> viu::response
+{
+    namespace po = boost::program_options;
+    auto desc = po::options_description{"Plug a device from a catalog"};
+    auto config_path = std::filesystem::path{};
+    auto catalog_path = std::filesystem::path{};
+    auto device_name = std::string{};
+    // clang-format off
+    desc.add_options()
+    ("help,h", "Show this message")
+    (
+        "config,c",
+        po::value<std::filesystem::path>(&config_path),
+        "Path to a device configuration"
+    )
+    (
+        "catalog,m",
+        po::value<std::filesystem::path>(&catalog_path),
+        "Path to a device catalog"
+    )
+    (
+        "device-name,n",
+        po::value<std::string>(&device_name),
+        "Name of the device to plug"
+    );
+    // clang-format on
+
+    const auto vm = parse_command(args, desc);
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
+        desc.print(ss);
+        return viu::response::success(ss.str());
+    }
+
+    if (auto res =
+            check_cli_params(vm, desc, {"config", "catalog", "device-name"});
+        !res) {
+        return viu::response::failure(
+            std::string(res.error().message()),
+            res.error()
+        );
+    }
+
+    return app_plug(config_path, catalog_path, device_name);
+}
+
 auto service::run_version_command(const std::span<const char*>& args)
     -> viu::response
 {
     return app_version();
+}
+
+auto service::run_list_command(const std::span<const char*>& args)
+    -> viu::response
+{
+    namespace po = boost::program_options;
+    auto desc = po::options_description{"List connected devices"};
+    // clang-format off
+    desc.add_options()
+    ("help,h", "Show this message");
+    // clang-format on
+
+    const auto vm = parse_command(args, desc);
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
+        desc.print(ss);
+        return viu::response::success(ss.str());
+    }
+
+    return app_list();
+}
+
+auto service::run_unplug_command(const std::span<const char*>& args)
+    -> viu::response
+{
+    namespace po = boost::program_options;
+    auto desc = po::options_description{"Unplug a virtual device"};
+    auto device_id = std::uint64_t{0};
+    // clang-format off
+    desc.add_options()
+    ("help,h", "Show this message")
+    (
+        "device-id,i",
+        po::value<std::uint64_t>(&device_id),
+        "Device id to unplug"
+    );
+    // clang-format on
+
+    const auto vm = parse_command(args, desc);
+    if (vm.count("help")) {
+        auto ss = std::stringstream{};
+        desc.print(ss);
+        return viu::response::success(ss.str());
+    }
+
+    if (auto res = check_cli_params(vm, desc, {"device-id"}); !res) {
+        return viu::response::failure(
+            std::string(res.error().message()),
+            res.error()
+        );
+    }
+
+    return app_unplug(device_id);
 }
 
 auto service::execute_from_argv(int argc, const char* argv[]) -> viu::response
@@ -440,8 +649,24 @@ auto service::execute_from_argv(int argc, const char* argv[]) -> viu::response
          [this](const std::span<const char*>& args) {
              return run_mock_command(args);
          }},
-        {"version", [this](const std::span<const char*>& args) {
+        {"list-catalogs",
+         [this](const std::span<const char*>& args) {
+             return run_list_catalogs_command(args);
+         }},
+        {"plug",
+         [this](const std::span<const char*>& args) {
+             return run_plug_command(args);
+         }},
+        {"version",
+         [this](const std::span<const char*>& args) {
              return run_version_command(args);
+         }},
+        {"list",
+         [this](const std::span<const char*>& args) {
+             return run_list_command(args);
+         }},
+        {"unplug", [this](const std::span<const char*>& args) {
+             return run_unplug_command(args);
          }}
     };
 

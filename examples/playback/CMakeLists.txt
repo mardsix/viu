@@ -2,7 +2,7 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "a9e1cf81-9932-4810-974b-6eccaf14e457")
 
 cmake_minimum_required(VERSION 4.0)
 
-project(viumouse)
+project(viumock)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -13,9 +13,11 @@ set(
     "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -gdwarf-4"
 )
 
-set(MOCK_LIB_NAME ${PROJECT_NAME}-mock)
+set(PROXY_LIB_NAME ${PROJECT_NAME}-record)
+set(PLAYBACK_LIB_NAME ${PROJECT_NAME}-playback)
 
-add_library(${MOCK_LIB_NAME} SHARED)
+add_library(${PROXY_LIB_NAME} SHARED)
+add_library(${PLAYBACK_LIB_NAME} SHARED)
 
 option(ENABLE_CLANG_TIDY "Enable clang-tidy" OFF)
 
@@ -49,9 +51,14 @@ endif()
 
 add_compile_options(-Wall -Wpedantic)
 
-target_sources(${MOCK_LIB_NAME}
+target_sources(${PROXY_LIB_NAME}
     PRIVATE
-    mock.cpp
+    recording_proxy.cpp
+)
+
+target_sources(${PLAYBACK_LIB_NAME}
+    PRIVATE
+    playback_device.cpp
 )
 
 include_directories(

@@ -41,14 +41,11 @@ template <typename T>
 concept has_on_control_setup_member = requires(
     T t,
     libusb_control_setup s,
-    const uint8_t* data,
+    uint8_t* data,
     size_t data_size,
-    uint8_t* out,
-    size_t* out_size
+    int result
 ) {
-    {
-        t.on_control_setup(s, data, data_size, out, out_size)
-    } -> std::same_as<int>;
+    { t.on_control_setup(s, data, data_size, result) } -> std::same_as<int>;
 };
 
 template <typename T>
@@ -56,12 +53,9 @@ concept has_on_control_setup_static = requires(
     libusb_control_setup s,
     const uint8_t* data,
     size_t data_size,
-    uint8_t* out,
-    size_t* out_size
+    int result
 ) {
-    {
-        T::on_control_setup(s, data, data_size, out, out_size)
-    } -> std::same_as<int>;
+    { T::on_control_setup(s, data, data_size, result) } -> std::same_as<int>;
 };
 
 template <typename T>
@@ -82,26 +76,6 @@ concept has_on_set_interface_member = requires(T t, uint8_t i, uint8_t a) {
 template <typename T>
 concept has_on_set_interface_static = requires(uint8_t i, uint8_t a) {
     { T::on_set_interface(i, a) } -> std::same_as<int>;
-};
-
-template <typename T>
-concept has_tick_interval_member = requires(T t) {
-    { t.tick_interval() } -> std::same_as<uint64_t>;
-};
-
-template <typename T>
-concept has_tick_interval_static = requires {
-    { T::tick_interval() } -> std::same_as<uint64_t>;
-};
-
-template <typename T>
-concept has_tick_member = requires(T t) {
-    { t.tick() } -> std::same_as<void>;
-};
-
-template <typename T>
-concept has_tick_static = requires {
-    { T::tick() } -> std::same_as<void>;
 };
 
 template <typename T>
@@ -137,21 +111,20 @@ inline void dispatch_transfer_compete(
 }
 
 template <typename T>
-inline int dispatch_control(
+inline int dispatch_control_setup(
     void* ctx,
     libusb_control_setup s,
-    const uint8_t* data,
+    uint8_t* data,
     size_t data_size,
-    uint8_t* out,
-    size_t* out_size
+    int result
 ) noexcept
 {
     try {
         if constexpr (has_on_control_setup_static<T>) {
-            return T::on_control_setup(s, data, data_size, out, out_size);
+            return T::on_control_setup(s, data, data_size, result);
         } else if constexpr (has_on_control_setup_member<T>) {
             return static_cast<T*>(ctx)
-                ->on_control_setup(s, data, data_size, out, out_size);
+                ->on_control_setup(s, data, data_size, result);
         }
     } catch (...) {
         return LIBUSB_ERROR_OTHER;
@@ -197,33 +170,6 @@ inline int dispatch_set_interface(
 }
 
 template <typename T>
-inline uint64_t dispatch_tick_interval(void* ctx) noexcept
-{
-    try {
-        if constexpr (has_tick_interval_static<T>) {
-            return T::tick_interval();
-        } else if constexpr (has_tick_interval_member<T>) {
-            return static_cast<T*>(ctx)->tick_interval();
-        }
-    } catch (...) {
-        return 0;
-    }
-}
-
-template <typename T>
-inline void dispatch_tick(void* ctx) noexcept
-{
-    try {
-        if constexpr (has_tick_static<T>) {
-            T::tick();
-        } else if constexpr (has_tick_member<T>) {
-            static_cast<T*>(ctx)->tick();
-        }
-    } catch (...) {
-    }
-}
-
-template <typename T>
 inline void destroy_impl(viu_usb_mock_opaque* self) noexcept
 {
     try {
@@ -256,19 +202,17 @@ inline void destroy_impl(viu_usb_mock_opaque* self) noexcept
     extern "C" int Name##_on_control_setup(                                    \
         void* ctx,                                                             \
         libusb_control_setup s,                                                \
-        const uint8_t* data,                                                   \
+        uint8_t* data,                                                         \
         size_t data_size,                                                      \
-        uint8_t* out,                                                          \
-        size_t* out_size                                                       \
+        int result                                                             \
     ) noexcept                                                                 \
     {                                                                          \
-        return viu::detail::dispatch_control<Type>(                            \
+        return viu::detail::dispatch_control_setup<Type>(                      \
             ctx,                                                               \
             s,                                                                 \
             data,                                                              \
             data_size,                                                         \
-            out,                                                               \
-            out_size                                                           \
+            result                                                             \
         );                                                                     \
     }                                                                          \
                                                                                \
@@ -289,16 +233,6 @@ inline void destroy_impl(viu_usb_mock_opaque* self) noexcept
         return viu::detail::dispatch_set_interface<Type>(ctx, iface, alt);     \
     }                                                                          \
                                                                                \
-    extern "C" uint64_t Name##_tick_interval(void* ctx) noexcept               \
-    {                                                                          \
-        return viu::detail::dispatch_tick_interval<Type>(ctx);                 \
-    }                                                                          \
-                                                                               \
-    extern "C" void Name##_tick(void* ctx) noexcept                            \
-    {                                                                          \
-        viu::detail::dispatch_tick<Type>(ctx);                                 \
-    }                                                                          \
-                                                                               \
     extern "C" void Name##_destroy(viu_usb_mock_opaque* self) noexcept         \
     {                                                                          \
         delete static_cast<Type*>(self->ctx);                                  \
@@ -315,8 +249,6 @@ inline void destroy_impl(viu_usb_mock_opaque* self) noexcept
         self->on_control_setup = &Name##_on_control_setup;                     \
         self->on_set_configuration = &Name##_on_set_configuration;             \
         self->on_set_interface = &Name##_on_set_interface;                     \
-        self->tick_interval = &Name##_tick_interval;                           \
-        self->tick = &Name##_tick;                                             \
         return self;                                                           \
     }
 

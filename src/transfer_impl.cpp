@@ -12,8 +12,6 @@ import viu.usb;
 
 namespace viu::usb::transfer {
 
-const auto timeout = std::chrono::seconds{0};
-
 namespace {
 
 auto give_away_transfer(libusb_transfer* const transfer)
@@ -31,7 +29,7 @@ auto give_away_transfer(libusb_transfer* const transfer)
 
 } // namespace
 
-void callback::on_transfer_completed_impl(libusb_transfer* const transfer)
+void pending_map::on_transfer_completed_impl(libusb_transfer* const transfer)
 {
     std::unique_lock lock(mutex_);
 
@@ -47,7 +45,7 @@ void callback::on_transfer_completed_impl(libusb_transfer* const transfer)
         auto it = pending_transfers_.find(transfer);
         viu::_assert(it != pending_transfers_.end());
 
-        auto callback_func = it->second.callback;
+        auto callback_func = it->second;
         pending_transfers_.erase(it);
 
         lock.unlock();
@@ -55,29 +53,22 @@ void callback::on_transfer_completed_impl(libusb_transfer* const transfer)
     }
 }
 
-void LIBUSB_CALL on_transfer_completed(libusb_transfer* const transfer)
-{
-    auto* const self = static_cast<callback*>(transfer->user_data);
-    viu::_assert(self != nullptr);
-    self->on_transfer_completed_impl(transfer);
-}
-
-void callback::attach(
-    const type& cb,
-    control ctrl,
-    libusb_transfer* const transfer
+void pending_map::attach(
+    const callback_type& cb,
+    libusb_transfer* const transfer,
+    void* user_data
 )
 {
-    transfer->user_data = this;
+    transfer->user_data = user_data;
 
     {
         [[maybe_unused]] const std::unique_lock _(mutex_);
-        auto r = pending_transfers_.insert({transfer, {cb, ctrl}});
+        auto r = pending_transfers_.insert({transfer, cb});
         viu::_assert(r.second);
     }
 }
 
-void callback::cancel()
+void pending_map::cancel()
 {
     {
         std::unique_lock lock(mutex_);
@@ -104,7 +95,7 @@ void callback::cancel()
     pending_transfers_.clear();
 }
 
-void callback::wait_for_canceled_transfers()
+void pending_map::wait_for_canceled_transfers()
 {
     using namespace std::chrono_literals;
     while (true) {
@@ -117,7 +108,7 @@ void callback::wait_for_canceled_transfers()
     }
 }
 
-auto alloc(std::optional<int> iso_packets = std::nullopt) -> libusb_transfer*
+auto alloc(std::optional<int> iso_packets) -> libusb_transfer*
 {
     const auto usb_transfer = libusb_alloc_transfer(iso_packets.value_or(0));
     viu::_assert(usb_transfer != nullptr);
@@ -151,7 +142,7 @@ auto actual_length(const usb::transfer::pointer& transfer) -> std::uint32_t
     return transfer->actual_length;
 }
 
-void callback::submit(
+void pending_map::submit(
     const usb::device::context_pointer& ctx,
     libusb_transfer* transfer
 )
@@ -175,16 +166,6 @@ void callback::submit(
 
     const auto res = libusb_submit_transfer(transfer);
     viu::_assert(res == LIBUSB_SUCCESS);
-}
-
-auto callback::get_control(libusb_transfer* transfer) -> control*
-{
-    std::shared_lock lock(mutex_);
-    auto it = pending_transfers_.find(transfer);
-    if (it != pending_transfers_.end()) {
-        return &(it->second.control_obj);
-    }
-    return nullptr;
 }
 
 auto iso_data(const usb::transfer::pointer& transfer)
@@ -263,110 +244,16 @@ auto iso_descriptors(const usb::transfer::pointer& transfer)
     return iso_desc;
 }
 
-control fill_bulk(
-    const info& transfer_info,
-    libusb_device_handle* const device_handle
-)
-{
-    const auto usb_transfer = alloc();
-
-    auto buffer = new unsigned char[std::size(transfer_info.buffer)];
-    viu::_assert(buffer != nullptr);
-
-    std::copy(
-        std::begin(transfer_info.buffer),
-        std::end(transfer_info.buffer),
-        buffer
-    );
-
-    libusb_fill_bulk_transfer(
-        usb_transfer,
-        device_handle,
-        transfer_info.ep_address,
-        buffer,
-        std::size(transfer_info.buffer),
-        on_transfer_completed,
-        nullptr,
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count()
-    );
-
-    return control{usb_transfer};
-}
-
-control fill_interrupt(
-    const info& transfer_info,
-    libusb_device_handle* const device_handle
-)
-{
-    const auto usb_transfer = alloc();
-
-    auto buffer = new unsigned char[std::size(transfer_info.buffer)];
-    viu::_assert(buffer != nullptr);
-
-    std::copy(
-        std::begin(transfer_info.buffer),
-        std::end(transfer_info.buffer),
-        buffer
-    );
-
-    libusb_fill_interrupt_transfer(
-        usb_transfer,
-        device_handle,
-        transfer_info.ep_address,
-        buffer,
-        std::size(transfer_info.buffer),
-        on_transfer_completed,
-        nullptr,
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count()
-    );
-
-    return control{usb_transfer};
-}
-
-control fill_iso(
-    const info& transfer_info,
-    libusb_device_handle* const device_handle
-)
-{
-    const auto iso_packet_count =
-        transfer_info.iso.value_or(iso{.packet_count = 1}).packet_count;
-    const auto usb_transfer = alloc(iso_packet_count);
-    const auto transfer_size = std::size(transfer_info.buffer);
-
-    auto buffer = new unsigned char[transfer_size];
-    viu::_assert(buffer != nullptr);
-
-    std::copy(
-        std::begin(transfer_info.buffer),
-        std::end(transfer_info.buffer),
-        buffer
-    );
-
-    libusb_fill_iso_transfer(
-        usb_transfer,
-        device_handle,
-        transfer_info.ep_address,
-        buffer,
-        transfer_size,
-        iso_packet_count,
-        on_transfer_completed,
-        nullptr,
-        std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count()
-    );
-
-    const auto packet_size = transfer_size / iso_packet_count;
-    libusb_set_iso_packet_lengths(usb_transfer, packet_size);
-
-    return control{usb_transfer};
-}
-
 void control::complete() const
 {
     viu::_assert(xfer_ != nullptr);
     viu::_assert(usb::transfer::is_mock(xfer_));
 
     xfer_->status = LIBUSB_TRANSFER_COMPLETED;
-    on_transfer_completed(xfer_);
+
+    if (xfer_->callback != nullptr) {
+        xfer_->callback(xfer_);
+    }
 }
 
 auto control::is_in() -> bool const
@@ -442,16 +329,61 @@ auto control::ep() const -> std::uint8_t
     return xfer_->endpoint;
 }
 
-void control::attach(const callback::type& cb, callback& cbs)
+void control::attach(
+    const pending_map::callback_type& cb,
+    pending_map& xfer_map,
+    void* user_data
+)
 {
     viu::_assert(xfer_ != nullptr);
-    cbs.attach(cb, *this, xfer_);
+    xfer_map.attach(cb, xfer_, user_data);
 }
 
-void control::submit(const usb::device::context_pointer& ctx, callback& cbs)
+void control::submit(
+    const usb::device::context_pointer& ctx,
+    pending_map& xfer_map
+)
 {
     viu::_assert(xfer_ != nullptr);
-    cbs.submit(ctx, xfer_);
+    xfer_map.submit(ctx, xfer_);
+}
+
+auto control::read_iso_packet_descriptors() const
+    -> std::vector<libusb_iso_packet_descriptor>
+{
+    viu::_assert(xfer_ != nullptr);
+    viu::_assert(usb::transfer::is_iso(xfer_));
+
+    return format::unsafe::vectorize(
+        xfer_->iso_packet_desc,
+        xfer_->num_iso_packets
+    );
+}
+
+auto control::iso_packet_descriptor_count() const -> std::size_t
+{
+    viu::_assert(xfer_ != nullptr);
+
+    if (usb::transfer::is_iso(xfer_)) {
+        return xfer_->num_iso_packets;
+    }
+
+    return 0;
+}
+
+void control::fill_iso_packet_descriptors(
+    const std::vector<libusb_iso_packet_descriptor>& data
+)
+{
+    viu::_assert(xfer_ != nullptr);
+    viu::_assert(usb::transfer::is_iso(xfer_));
+    viu::_assert(
+        std::size(data) <= static_cast<std::size_t>(xfer_->num_iso_packets)
+    );
+
+    for (std::size_t i = 0; i < std::size(data); ++i) {
+        xfer_->iso_packet_desc[i] = data[i];
+    }
 }
 
 } // namespace viu::usb::transfer

@@ -1,10 +1,5 @@
 module;
 
-// TODO: remove
-// 21.1.3 (++20250923093437+74cb34a6f51a-1~exp1~20250923213555.35)
-// fails to find operator== for std::filesystem::path with import std;
-#include <filesystem>
-
 #include <boost/fusion/include/adapt_struct.hpp>
 #include <boost/spirit/home/x3.hpp>
 

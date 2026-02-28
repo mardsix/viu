@@ -6,7 +6,7 @@ import viu.boost;
 
 namespace viu {
 
-export enum class error_category : std::uint8_t { none, cli, usb };
+export enum class error_category : std::uint8_t { none, cli, usb, catalog };
 
 template <typename T>
 concept enum_type = std::is_enum_v<T>;

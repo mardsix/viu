@@ -72,7 +72,7 @@ device::device(
     : device_id_{.vid = vid, .pid = pid}
 {
     if (xfer_instance != nullptr) {
-        xfer_instance_ = std::shared_ptr<viu_usb_mock_opaque>{
+        mock_iface_ = std::shared_ptr<viu_usb_mock_opaque>{
             xfer_instance,
             mock_opaque_deleter{}
         };
@@ -295,14 +295,18 @@ auto device::pack_device_descriptor() const -> vector_type
 
 auto device::set_configuration(std::uint8_t index) -> int
 {
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_set_configuration != nullptr) {
-        [[maybe_unused]] const auto iface_res =
-            xfer_instance_->on_set_configuration(xfer_instance_.get(), index);
+    auto result = int{LIBUSB_ERROR_NOT_SUPPORTED};
+    if (mock_iface_ != nullptr &&
+        mock_iface_->on_set_configuration != nullptr) {
+        result = mock_iface_->on_set_configuration(mock_iface_.get(), index);
+    }
+
+    if (is_mock()) {
+        return result;
     }
 
     auto current_index = int{-1};
-    auto result = libusb_get_configuration(underlying_handle(), &current_index);
+    result = libusb_get_configuration(underlying_handle(), &current_index);
     viu::_assert(result == LIBUSB_SUCCESS);
 
     if (std::cmp_not_equal(index, current_index)) {
@@ -610,16 +614,18 @@ auto device::open_cloned_libusb_device(libusb_device* dev) -> int
 auto device::on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
     -> int
 {
-    viu::_assert(has_valid_handle());
+    auto result = int{LIBUSB_ERROR_NOT_SUPPORTED};
 
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_set_interface != nullptr) {
-        [[maybe_unused]] const auto iface_res =
-            xfer_instance_->on_set_interface(
-                xfer_instance_.get(),
-                interface,
-                alt_setting
-            );
+    if (mock_iface_ != nullptr && mock_iface_->on_set_interface != nullptr) {
+        result = mock_iface_->on_set_interface(
+            mock_iface_.get(),
+            interface,
+            alt_setting
+        );
+    }
+
+    if (is_mock()) {
+        return result;
     }
 
     return libusb_set_interface_alt_setting(
@@ -642,25 +648,28 @@ auto device::set_interface(std::uint8_t interface, std::uint8_t alt_setting)
 
 namespace {
 
+auto transfer_control_of(void* ctx) -> viu::usb::transfer::control
+{
+    viu::_assert(ctx != nullptr);
+    auto* xfer = static_cast<libusb_transfer*>(ctx);
+    return viu::usb::transfer::control{xfer};
+}
+
+extern "C" {
+
 void transfer_control_complete(void* ctx)
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    control.complete();
+    transfer_control_of(ctx).complete();
 }
 
 bool transfer_control_is_in(void* ctx)
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    return control.is_in();
+    return transfer_control_of(ctx).is_in();
 }
 
 bool transfer_control_is_out(void* ctx)
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    return control.is_out();
+    return transfer_control_of(ctx).is_out();
 }
 
 void transfer_control_fill(
@@ -669,10 +678,8 @@ void transfer_control_fill(
     std::size_t size
 )
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    auto vec = std::vector<std::uint8_t>(data, data + size);
-    control.fill(vec);
+    auto vec = viu::format::unsafe::vectorize(data, size);
+    transfer_control_of(ctx).fill(vec);
 }
 
 void transfer_control_read(
@@ -681,8 +688,7 @@ void transfer_control_read(
     std::uint32_t size
 )
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
+    auto control = transfer_control_of(ctx);
     if (size == 0) {
         size = control.size();
     } else {
@@ -695,33 +701,64 @@ void transfer_control_read(
     }
 }
 
-int transfer_control_size(void* ctx)
-{
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    return control.size();
-}
+int transfer_control_size(void* ctx) { return transfer_control_of(ctx).size(); }
 
 unsigned char transfer_control_type(void* ctx)
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    return control.type();
+    return transfer_control_of(ctx).type();
 }
 
 std::uint8_t transfer_control_ep(void* ctx)
 {
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    auto control = viu::usb::transfer::control(xfer);
-    return control.ep();
+    return transfer_control_of(ctx).ep();
 }
 
-viu_usb_mock_transfer_control_opaque make_opaque_transfer_control(
-    const viu::usb::transfer::control& control
+void transfer_control_read_iso_packet_descriptors(
+    void* ctx,
+    struct libusb_iso_packet_descriptor* out_descriptors,
+    size_t out_count
 )
 {
+    auto control = transfer_control_of(ctx);
+
+    if (control.iso_packet_descriptor_count() > 0 &&
+        out_descriptors != nullptr) {
+        auto descriptors = control.read_iso_packet_descriptors();
+        const auto count = std::min(out_count, descriptors.size());
+        if (count > 0) {
+            std::memcpy(
+                out_descriptors,
+                descriptors.data(),
+                count * sizeof(struct libusb_iso_packet_descriptor)
+            );
+        }
+    }
+}
+
+size_t transfer_control_iso_packet_descriptor_count(void* ctx)
+{
+    return transfer_control_of(ctx).iso_packet_descriptor_count();
+}
+
+void transfer_control_fill_iso_packet_descriptors(
+    void* ctx,
+    const struct libusb_iso_packet_descriptor* data,
+    size_t size
+)
+{
+    auto vec = viu::format::unsafe::vectorize(data, size);
+    transfer_control_of(ctx).fill_iso_packet_descriptors(vec);
+}
+}
+
+} // namespace
+
+auto device::make_opaque_transfer_control(
+    const viu::usb::transfer::control& control
+) -> viu_usb_mock_transfer_control_opaque
+{
     return viu_usb_mock_transfer_control_opaque{
-        .ctx = const_cast<libusb_transfer*>(control.underlying_transfer()),
+        .ctx = control.underlying_transfer(),
         .complete = &transfer_control_complete,
         .is_in = &transfer_control_is_in,
         .is_out = &transfer_control_is_out,
@@ -730,10 +767,33 @@ viu_usb_mock_transfer_control_opaque make_opaque_transfer_control(
         .size = &transfer_control_size,
         .type = &transfer_control_type,
         .ep = &transfer_control_ep,
+        .read_iso_packet_descriptors =
+            &transfer_control_read_iso_packet_descriptors,
+        .iso_packet_descriptor_count =
+            &transfer_control_iso_packet_descriptor_count,
+        .fill_iso_packet_descriptors =
+            &transfer_control_fill_iso_packet_descriptors,
     };
 }
 
-} // namespace
+template <typename XferFillMemberFn>
+void device::submit_transfer_impl(
+    const transfer::info& transfer_info,
+    XferFillMemberFn fill_fn
+)
+{
+    auto xfer_control = (this->*fill_fn)(transfer_info, underlying_handle());
+    xfer_control.attach(transfer_info.callback, pending_transfers_map_, this);
+
+    if (mock_iface_ != nullptr && mock_iface_->on_transfer_request != nullptr) {
+        auto opaque_control = make_opaque_transfer_control(xfer_control);
+        mock_iface_->on_transfer_request(mock_iface_->ctx, opaque_control);
+    }
+
+    if (!is_mock()) {
+        xfer_control.submit(libusb_ctx(), pending_transfers_map_);
+    }
+}
 
 auto device::current_altsetting(std::uint8_t interface) -> std::uint8_t
 {
@@ -750,135 +810,139 @@ auto device::current_altsetting(std::uint8_t interface) -> std::uint8_t
     return altsetting->second;
 }
 
-void device::on_transfer_completed(viu_usb_mock_transfer_control_opaque xfer)
+void LIBUSB_CALL on_transfer_completed(libusb_transfer* const transfer)
 {
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_complete != nullptr) {
-        xfer_instance_->on_transfer_complete(xfer_instance_->ctx, xfer);
+    auto* const self = static_cast<viu::usb::device*>(transfer->user_data);
+    viu::_assert(self != nullptr);
+    self->on_transfer_completed(transfer);
+}
+
+void device::on_transfer_completed(libusb_transfer* const xfer)
+{
+    if (mock_iface_ != nullptr &&
+        mock_iface_->on_transfer_complete != nullptr) {
+        auto control = viu::usb::transfer::control(xfer);
+        auto opaque_control = make_opaque_transfer_control(control);
+        mock_iface_->on_transfer_complete(mock_iface_->ctx, opaque_control);
     }
+
+    pending_transfers_map_.on_transfer_completed_impl(xfer);
+}
+
+auto device::fill_bulk(
+    const usb::transfer::info& transfer_info,
+    libusb_device_handle* const device_handle
+) -> usb::transfer::control
+{
+    const auto usb_transfer = usb::transfer::alloc();
+
+    auto buffer = new unsigned char[std::size(transfer_info.buffer)];
+    viu::_assert(buffer != nullptr);
+
+    std::copy(
+        std::begin(transfer_info.buffer),
+        std::end(transfer_info.buffer),
+        buffer
+    );
+
+    libusb_fill_bulk_transfer(
+        usb_transfer,
+        device_handle,
+        transfer_info.ep_address,
+        buffer,
+        std::size(transfer_info.buffer),
+        ::on_transfer_completed,
+        nullptr,
+        std::chrono::duration_cast<std::chrono::milliseconds>(transfer_timeout)
+            .count()
+    );
+
+    return usb::transfer::control{usb_transfer};
+}
+
+auto device::fill_interrupt(
+    const usb::transfer::info& transfer_info,
+    libusb_device_handle* const device_handle
+) -> usb::transfer::control
+{
+    const auto usb_transfer = usb::transfer::alloc();
+
+    auto buffer = new unsigned char[std::size(transfer_info.buffer)];
+    viu::_assert(buffer != nullptr);
+
+    std::copy(
+        std::begin(transfer_info.buffer),
+        std::end(transfer_info.buffer),
+        buffer
+    );
+
+    libusb_fill_interrupt_transfer(
+        usb_transfer,
+        device_handle,
+        transfer_info.ep_address,
+        buffer,
+        std::size(transfer_info.buffer),
+        ::on_transfer_completed,
+        nullptr,
+        std::chrono::duration_cast<std::chrono::milliseconds>(transfer_timeout)
+            .count()
+    );
+
+    return usb::transfer::control{usb_transfer};
+}
+
+auto device::fill_iso(
+    const usb::transfer::info& transfer_info,
+    libusb_device_handle* const device_handle
+) -> usb::transfer::control
+{
+    const auto iso_packet_count =
+        transfer_info.iso.value_or(usb::transfer::iso{.packet_count = 1})
+            .packet_count;
+    const auto usb_transfer = usb::transfer::alloc(iso_packet_count);
+    const auto transfer_size = std::size(transfer_info.buffer);
+
+    auto buffer = new unsigned char[transfer_size];
+    viu::_assert(buffer != nullptr);
+
+    std::copy(
+        std::begin(transfer_info.buffer),
+        std::end(transfer_info.buffer),
+        buffer
+    );
+
+    libusb_fill_iso_transfer(
+        usb_transfer,
+        device_handle,
+        transfer_info.ep_address,
+        buffer,
+        transfer_size,
+        iso_packet_count,
+        ::on_transfer_completed,
+        nullptr,
+        std::chrono::duration_cast<std::chrono::milliseconds>(transfer_timeout)
+            .count()
+    );
+
+    const auto packet_size = transfer_size / iso_packet_count;
+    libusb_set_iso_packet_lengths(usb_transfer, packet_size);
+
+    return usb::transfer::control{usb_transfer};
 }
 
 void device::submit_bulk_transfer(const usb::transfer::info& transfer_info)
 {
-    const auto is_mock = underlying_handle() == nullptr;
-    auto transfer_control =
-        usb::transfer::fill_bulk(transfer_info, underlying_handle());
-
-    auto wrapped_callback = [this, original_cb = transfer_info.callback](
-                                usb::transfer::pointer xfer
-                            ) {
-        auto control = viu::usb::transfer::control(xfer.get());
-        auto opaque_control = make_opaque_transfer_control(control);
-
-        on_transfer_completed(opaque_control);
-
-        if (original_cb) {
-            original_cb(std::move(xfer));
-        }
-    };
-
-    auto modified_info = transfer_info;
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_complete != nullptr) {
-        modified_info.callback = wrapped_callback;
-    }
-
-    transfer_control.attach(modified_info.callback, cb_);
-
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_request != nullptr) {
-        auto opaque_control = make_opaque_transfer_control(transfer_control);
-        xfer_instance_->on_transfer_request(
-            xfer_instance_->ctx,
-            opaque_control
-        );
-    }
-
-    if (!is_mock) {
-        transfer_control.submit(libusb_ctx(), cb_);
-    }
+    submit_transfer_impl(transfer_info, &device::fill_bulk);
 }
 
 void device::submit_interrupt_transfer(const usb::transfer::info& transfer_info)
 {
-    const auto is_mock = underlying_handle() == nullptr;
-    auto transfer_control =
-        usb::transfer::fill_interrupt(transfer_info, underlying_handle());
-
-    auto wrapped_callback = [this, original_cb = transfer_info.callback](
-                                usb::transfer::pointer xfer
-                            ) {
-        auto control = viu::usb::transfer::control(xfer.get());
-        auto opaque_control = make_opaque_transfer_control(control);
-
-        on_transfer_completed(opaque_control);
-
-        if (original_cb) {
-            original_cb(std::move(xfer));
-        }
-    };
-
-    auto modified_info = transfer_info;
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_complete != nullptr) {
-        modified_info.callback = wrapped_callback;
-    }
-
-    transfer_control.attach(modified_info.callback, cb_);
-
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_request != nullptr) {
-        auto opaque_control = make_opaque_transfer_control(transfer_control);
-        xfer_instance_->on_transfer_request(
-            xfer_instance_->ctx,
-            opaque_control
-        );
-    }
-
-    if (!is_mock) {
-        transfer_control.submit(libusb_ctx(), cb_);
-    }
+    submit_transfer_impl(transfer_info, &device::fill_interrupt);
 }
 
 void device::submit_iso_transfer(const usb::transfer::info& transfer_info)
 {
-    const auto is_mock = underlying_handle() == nullptr;
-    auto transfer_control =
-        usb::transfer::fill_iso(transfer_info, underlying_handle());
-
-    auto wrapped_callback = [this, original_cb = transfer_info.callback](
-                                usb::transfer::pointer xfer
-                            ) {
-        auto control = viu::usb::transfer::control(xfer.get());
-        auto opaque_control = make_opaque_transfer_control(control);
-
-        on_transfer_completed(opaque_control);
-
-        if (original_cb) {
-            original_cb(std::move(xfer));
-        }
-    };
-
-    auto modified_info = transfer_info;
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_complete != nullptr) {
-        modified_info.callback = wrapped_callback;
-    }
-
-    transfer_control.attach(modified_info.callback, cb_);
-
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_transfer_request != nullptr) {
-        auto opaque_control = make_opaque_transfer_control(transfer_control);
-        xfer_instance_->on_transfer_request(
-            xfer_instance_->ctx,
-            opaque_control
-        );
-    }
-
-    if (!is_mock) {
-        transfer_control.submit(libusb_ctx(), cb_);
-    }
+    submit_transfer_impl(transfer_info, &device::fill_iso);
 }
 
 auto device::submit_control_setup(
@@ -895,33 +959,31 @@ auto device::submit_control_setup(
 
     setup_data.resize(setup.wLength);
 
-    if (xfer_instance_ != nullptr &&
-        xfer_instance_->on_control_setup != nullptr) {
-        auto out_data = std::vector<std::uint8_t>(setup.wLength);
-        std::size_t out_size = setup.wLength;
-        [[maybe_unused]] const auto iface_result =
-            xfer_instance_->on_control_setup(
-                xfer_instance_->ctx,
-                setup,
-                setup_data.data(),
-                setup_data.size(),
-                out_data.data(),
-                &out_size
-            );
+    auto result = int{LIBUSB_ERROR_NOT_SUPPORTED};
+    if (!is_mock()) {
+        result = libusb_control_transfer(
+            underlying_handle(),
+            setup.bmRequestType,
+            setup.bRequest,
+            setup.wValue,
+            setup.wIndex,
+            setup_data.data(),
+            setup.wLength,
+            0
+        );
     }
 
-    const auto result = libusb_control_transfer(
-        underlying_handle(),
-        setup.bmRequestType,
-        setup.bRequest,
-        setup.wValue,
-        setup.wIndex,
-        setup_data.data(),
-        setup.wLength,
-        0
-    );
+    if (mock_iface_ != nullptr && mock_iface_->on_control_setup != nullptr) {
+        result = mock_iface_->on_control_setup(
+            mock_iface_->ctx,
+            setup,
+            setup_data.data(),
+            std::size(setup_data),
+            result
+        );
+    }
 
-    if (result > 0) {
+    if (result >= 0) {
         setup_data.resize(result);
         return setup_data;
     }
@@ -947,50 +1009,4 @@ auto device::handle_events(
     return result;
 }
 
-void device::cancel_transfers() { cb_.cancel(); }
-
-using viu::usb::mock;
-
-auto mock::set_configuration(std::uint8_t index) -> int
-{
-    viu::_assert(xfer_instance_ != nullptr);
-    viu::_assert(xfer_instance_->on_set_configuration != nullptr);
-    return xfer_instance_->on_set_configuration(xfer_instance_.get(), index);
-}
-
-auto mock::on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
-    -> int
-{
-    viu::_assert(xfer_instance_ != nullptr);
-    viu::_assert(xfer_instance_->on_set_interface != nullptr);
-    return xfer_instance_
-        ->on_set_interface(xfer_instance_.get(), interface, alt_setting);
-}
-
-auto mock::submit_control_setup(
-    const libusb_control_setup& setup,
-    const std::vector<std::uint8_t>& data
-) -> std::expected<std::vector<std::uint8_t>, int>
-{
-    viu::_assert(xfer_instance_ != nullptr);
-    viu::_assert(xfer_instance_->on_control_setup != nullptr);
-
-    auto out_data = std::vector<std::uint8_t>(setup.wLength);
-    std::size_t out_size = setup.wLength;
-
-    const auto result = xfer_instance_->on_control_setup(
-        xfer_instance_.get(),
-        setup,
-        data.data(),
-        data.size(),
-        out_data.data(),
-        &out_size
-    );
-
-    if (result != 0) {
-        return std::unexpected(result);
-    }
-
-    out_data.resize(out_size);
-    return out_data;
-}
+void device::cancel_transfers() { pending_transfers_map_.cancel(); }

@@ -21,24 +21,29 @@ def symlink(src, dst):
         pass
 
 
-
 def build_boost():
     src = os.path.join(ROOT_DIR, "external", "boost")
     install = os.path.join(ROOT_DIR, "out", "install", "boost")
 
-    run(["./bootstrap.sh", "--with-toolset=clang", f"--prefix={install}"], cwd=src)
+    run(
+        ["./bootstrap.sh", "--with-toolset=clang", f"--prefix={install}"],
+        cwd=src,
+    )
     run(["./b2", "clean"], cwd=src)
-    run([
-        "./b2",
-        "toolset=clang",
-        "cxxflags=-stdlib=libc++",
-        "cxxflags=-fPIC",
-        "linkflags=-stdlib=libc++",
-        "link=static",
-        "threading=multi",
-        "install",
-        f"--prefix={install}",
-    ], cwd=src)
+    run(
+        [
+            "./b2",
+            "toolset=clang",
+            "cxxflags=-stdlib=libc++",
+            "cxxflags=-fPIC",
+            "linkflags=-stdlib=libc++",
+            "link=static",
+            "threading=multi",
+            "install",
+            f"--prefix={install}",
+        ],
+        cwd=src,
+    )
 
 
 def build_libusb():
@@ -46,12 +51,15 @@ def build_libusb():
     install = os.path.join(ROOT_DIR, "out", "install", "libusb")
 
     run(["./bootstrap.sh"], cwd=src)
-    run([
-        "./configure",
-        f"--prefix={install}",
-        "--enable-static",
-        "--with-pic",
-    ], cwd=src)
+    run(
+        [
+            "./configure",
+            f"--prefix={install}",
+            "--enable-static",
+            "--with-pic",
+        ],
+        cwd=src,
+    )
     run(["make"], cwd=src)
     run(["make", "install"], cwd=src)
 
@@ -61,19 +69,22 @@ def build_cmake():
     build = os.path.join(ROOT_DIR, "out", "build", "cmake")
     install = os.path.join(ROOT_DIR, "out", "install", "cmake")
 
-    run([
-        "cmake",
-        f"-DCMAKE_INSTALL_PREFIX={install}",
-        "-DBUILD_TESTING=OFF",
-        "-B", build,
-    ], cwd=src)
+    run(
+        [
+            "cmake",
+            f"-DCMAKE_INSTALL_PREFIX={install}",
+            "-DBUILD_TESTING=OFF",
+            "-B",
+            build,
+        ],
+        cwd=src,
+    )
 
     run(["cmake", "--build", build, f"-j{os.cpu_count()}"])
     run(["cmake", "--install", build])
 
     symlink(
-        os.path.join(install, "bin", "cmake"),
-        os.path.join(ROOT_DIR, "cmake4")
+        os.path.join(install, "bin", "cmake"), os.path.join(ROOT_DIR, "cmake4")
     )
 
 
@@ -82,19 +93,22 @@ def build_ninja():
     build = os.path.join(ROOT_DIR, "out", "build", "ninja")
     install = os.path.join(ROOT_DIR, "out", "install", "ninja")
 
-    run([
-        "cmake",
-        f"-DCMAKE_INSTALL_PREFIX={install}",
-        "-DBUILD_TESTING=OFF",
-        "-B", build,
-    ], cwd=src)
+    run(
+        [
+            "cmake",
+            f"-DCMAKE_INSTALL_PREFIX={install}",
+            "-DBUILD_TESTING=OFF",
+            "-B",
+            build,
+        ],
+        cwd=src,
+    )
 
     run(["cmake", "--build", build, f"-j{os.cpu_count()}"])
     run(["cmake", "--install", build])
 
     symlink(
-        os.path.join(install, "bin", "ninja"),
-        os.path.join(ROOT_DIR, "ninja")
+        os.path.join(install, "bin", "ninja"), os.path.join(ROOT_DIR, "ninja")
     )
 
 
@@ -109,19 +123,22 @@ def build_viud(enable_tidy, enable_format, build_type, enable_coverage):
     build = os.path.join(ROOT_DIR, "out", "build", "viu")
     install = os.path.join(ROOT_DIR, "out", "install", "viu")
 
-    run([
-        "./cmake4",
-        f"-DCMAKE_BUILD_TYPE={build_type}",
-        "-DCMAKE_CXX_COMPILER=clang++",
-        "-DCMAKE_C_COMPILER=clang",
-        f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
-        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
-        f"-DCMAKE_INSTALL_PREFIX={install}",
-        f"-DENABLE_CLANG_TIDY={enable_tidy}",
-        f"-DENABLE_COVERAGE={enable_coverage}",
-        "-GNinja",
-        "-B", build,
-    ])
+    run(
+        [
+            "./cmake4",
+            f"-DCMAKE_BUILD_TYPE={build_type}",
+            "-DCMAKE_CXX_COMPILER=clang++",
+            "-DCMAKE_C_COMPILER=clang",
+            f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
+            "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+            f"-DCMAKE_INSTALL_PREFIX={install}",
+            f"-DENABLE_CLANG_TIDY={enable_tidy}",
+            f"-DENABLE_COVERAGE={enable_coverage}",
+            "-GNinja",
+            "-B",
+            build,
+        ]
+    )
 
     run(["./cmake4", "--build", build])
     run(["./cmake4", "--install", build])
@@ -137,18 +154,22 @@ def build_mouse_example(enable_tidy, enable_format, build_type):
     src = os.path.join(ROOT_DIR, "examples", "mouse")
     build = os.path.join(ROOT_DIR, "out", "build", "examples", "mouse")
 
-    run([
-        "./cmake4",
-        f"-DCMAKE_BUILD_TYPE={build_type}",
-        "-DCMAKE_CXX_COMPILER=clang++",
-        "-DCMAKE_C_COMPILER=clang",
-        f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
-        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
-        f"-DENABLE_CLANG_TIDY={enable_tidy}",
-        "-GNinja",
-        "-S", src,
-        "-B", build,
-    ])
+    run(
+        [
+            "./cmake4",
+            f"-DCMAKE_BUILD_TYPE={build_type}",
+            "-DCMAKE_CXX_COMPILER=clang++",
+            "-DCMAKE_C_COMPILER=clang",
+            f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
+            "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+            f"-DENABLE_CLANG_TIDY={enable_tidy}",
+            "-GNinja",
+            "-S",
+            src,
+            "-B",
+            build,
+        ]
+    )
 
     run(["./cmake4", "--build", build])
 
@@ -157,9 +178,38 @@ def build_mouse_example(enable_tidy, enable_format, build_type):
         run(["./cmake4", "--build", build, "--target", "format"])
 
 
+def build_playback_example(enable_tidy, enable_format, build_type):
+    src = os.path.join(ROOT_DIR, "examples", "playback")
+    build = os.path.join(ROOT_DIR, "out", "build", "examples", "playback")
+
+    run(
+        [
+            "./cmake4",
+            f"-DCMAKE_BUILD_TYPE={build_type}",
+            "-DCMAKE_CXX_COMPILER=clang++",
+            "-DCMAKE_C_COMPILER=clang",
+            f"-DCMAKE_MAKE_PROGRAM={os.path.join(ROOT_DIR, 'ninja')}",
+            "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+            f"-DENABLE_CLANG_TIDY={enable_tidy}",
+            "-GNinja",
+            "-S",
+            src,
+            "-B",
+            build,
+        ]
+    )
+
+    run(["./cmake4", "--build", build])
+
+    if enable_format == "ON":
+        print("Running clang-format on playback example...")
+        run(["./cmake4", "--build", build, "--target", "format"])
+
+
 def build_all(enable_tidy, enable_format, build_type, enable_coverage):
     build_viud(enable_tidy, enable_format, build_type, enable_coverage)
     build_mouse_example(enable_tidy, enable_format, build_type)
+    build_playback_example(enable_tidy, enable_format, build_type)
 
 
 def build_and_run_gtest():
@@ -169,12 +219,15 @@ def build_and_run_gtest():
 
     run(["./cmake4", "--build", build, "--target", "viu-gtest"])
     run(["cp", config, os.path.join(build, "src", "test", config_out)])
-    run([
-        "sudo",
-        "ctest",
-        "--test-dir", os.path.join(build, "src", "test"),
-        "--output-on-failure"
-    ])
+    run(
+        [
+            "sudo",
+            "ctest",
+            "--test-dir",
+            os.path.join(build, "src", "test"),
+            "--output-on-failure",
+        ]
+    )
 
 
 def uninstall_service():
@@ -192,6 +245,7 @@ def uninstall_service():
     run(["sudo", "rm", "/tmp/viud/viud.sock"], check=False)
 
     print("viud service removed.")
+
 
 def install_service():
     uninstall_service()
@@ -220,15 +274,20 @@ def sync_usbip(tag: str) -> None:
     )
 
     if not os.path.isdir(os.path.join(usbip_dir, ".git")):
-        run([
-            "git", "clone", "--filter=blob:none", "--no-checkout",
-            kernel_git_url,
-            usbip_dir
-        ])
+        run(
+            [
+                "git",
+                "clone",
+                "--filter=blob:none",
+                "--no-checkout",
+                kernel_git_url,
+                usbip_dir,
+            ]
+        )
         run(["git", "sparse-checkout", "init", "--cone"], cwd=usbip_dir)
         run(
             ["git", "sparse-checkout", "set", "drivers/usb/usbip"],
-            cwd=usbip_dir
+            cwd=usbip_dir,
         )
     else:
         run(["git", "fetch", "--tags", "--prune"], cwd=usbip_dir)
@@ -238,7 +297,7 @@ def sync_usbip(tag: str) -> None:
     shutil.copytree(
         os.path.join(ROOT_DIR, "external", "usbip"),
         os.path.join(usbip_dir, "drivers", "usb", "usbip"),
-        dirs_exist_ok=True
+        dirs_exist_ok=True,
     )
 
 
@@ -252,29 +311,22 @@ def main():
     build.add_argument("--clang-tidy", default="OFF", choices=["ON", "OFF"])
     build.add_argument("--clang-format", default="OFF", choices=["ON", "OFF"])
     build.add_argument(
-        "--build-type",
-        default="Release",
-        choices=["Release", "Debug"]
+        "--build-type", default="Release", choices=["Release", "Debug"]
     )
-    build.add_argument(
-        "--coverage",
-        default="OFF",
-        choices=["ON", "OFF"]
-    )
+    build.add_argument("--coverage", default="OFF", choices=["ON", "OFF"])
 
     sub.add_parser("test", help="Build and run tests")
     sub.add_parser("install", help="install systemd service")
     sub.add_parser("uninstall", help="remove systemd service")
 
     usbip = sub.add_parser(
-        "fetch-usbip",
-        help="sync usbip subtree from Linux kernel"
+        "fetch-usbip", help="sync usbip subtree from Linux kernel"
     )
     default_kernel_tag = "v6.14"
     usbip.add_argument(
         "--tag",
         default=default_kernel_tag,
-        help=f"Kernel tag or commit to sync (default: {default_kernel_tag})"
+        help=f"Kernel tag or commit to sync (default: {default_kernel_tag})",
     )
 
     args = parser.parse_args()
@@ -286,10 +338,7 @@ def main():
         print(f"clang-format enabled: {args.clang_format}")
         print(f"coverage enabled: {args.coverage}")
         build_all(
-            args.clang_tidy,
-            args.clang_format,
-            args.build_type,
-            args.coverage
+            args.clang_tidy, args.clang_format, args.build_type, args.coverage
         )
     elif args.cmd == "test":
         build_and_run_gtest()

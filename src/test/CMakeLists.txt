@@ -93,7 +93,6 @@ target_sources(${TEST_EXECUTABLE_NAME}
     ${VIU_TOP_SOURCE_DIR}/src/format.cppm
     ${VIU_TOP_SOURCE_DIR}/src/io.cppm
     ${VIU_TOP_SOURCE_DIR}/src/json/json.cppm
-    ${VIU_TOP_SOURCE_DIR}/src/tickable.cppm
     ${VIU_TOP_SOURCE_DIR}/src/transfer.cppm
     ${VIU_TOP_SOURCE_DIR}/src/types.cppm
     ${VIU_TOP_SOURCE_DIR}/src/usb_mock_abi.cppm

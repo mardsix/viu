@@ -276,7 +276,7 @@ auto proxy::prepare_iso_descriptors_buffer(const usbip::command& cmd)
 auto proxy::prepare_transfer(const usbip::command& cmd) -> usb::transfer::info
 {
     using xfr_ptr = usb::transfer::pointer;
-    using cb_t = usb::transfer::callback::type;
+    using cb_t = usb::transfer::pending_map::callback_type;
 
     const auto buffer = prepare_buffer(cmd);
 

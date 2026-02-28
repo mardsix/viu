@@ -18,7 +18,7 @@ set(DAEMON_NAME ${PROJECT_NAME}d)
 
 set(APP_MAJOR_VERSION 0)
 set(APP_MINOR_VERSION 3)
-set(APP_PATCH_VERSION 1)
+set(APP_PATCH_VERSION 2)
 set(APP_PRE_RELEASE_VERSION "alpha")
 
 find_package(Git QUIET)
@@ -145,7 +145,6 @@ set(VIU_MODULES
     src/plugin/catalog.cppm
     src/plugin/catalog_loader.cppm
     src/io.cppm
-    src/tickable.cppm
     src/transfer.cppm
     src/types.cppm
     src/usb_mock_abi.cppm

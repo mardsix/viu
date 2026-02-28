@@ -31,7 +31,7 @@ public:
 
 private:
     using transfer_tuple = std::tuple<
-        usb::transfer::callback::type,
+        usb::transfer::pending_map::callback_type,
         usbip::command::payload_shared_ptr>;
 
     void on_out_iso_transfer_complete(

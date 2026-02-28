@@ -7,7 +7,6 @@ export module viu.usb;
 import std;
 
 import viu.error;
-import viu.tickable;
 import viu.transfer;
 import viu.types;
 
@@ -15,6 +14,8 @@ import viu.usb.mock.abi;
 import viu.usb.descriptors;
 
 namespace viu::usb {
+
+const auto transfer_timeout = std::chrono::seconds{0};
 
 struct mock_opaque_deleter {
     void operator()(viu_usb_mock_opaque* ptr) const noexcept
@@ -81,7 +82,7 @@ public:
         std::uint8_t index
     ) const -> vector_type;
 
-    [[nodiscard]] virtual auto set_configuration(std::uint8_t index) -> int;
+    [[nodiscard]] auto set_configuration(std::uint8_t index) -> int;
     [[nodiscard]] virtual auto is_self_powered() const -> bool;
     [[nodiscard]] auto speed() const noexcept -> std::uint16_t;
 
@@ -97,9 +98,9 @@ public:
     void submit_interrupt_transfer(const transfer::info& transfer_info);
     void submit_iso_transfer(const transfer::info& transfer_info);
 
-    void on_transfer_completed(viu_usb_mock_transfer_control_opaque xfer);
+    void on_transfer_completed(libusb_transfer* const xfer);
 
-    [[nodiscard]] virtual auto submit_control_setup(
+    [[nodiscard]] auto submit_control_setup(
         const libusb_control_setup& setup,
         const std::vector<std::uint8_t>& data = {}
     ) -> std::expected<std::vector<std::uint8_t>, int>;
@@ -122,7 +123,7 @@ private:
     [[nodiscard]] virtual auto underlying_handle() const
         -> libusb_device_handle*;
 
-    [[nodiscard]] virtual auto on_set_interface(
+    [[nodiscard]] auto on_set_interface(
         std::uint8_t interface,
         std::uint8_t alt_setting
     ) -> int;
@@ -158,14 +159,41 @@ private:
         std::uint8_t index
     ) const -> std::expected<std::vector<T>, error>;
 
+    auto is_mock() const -> bool { return underlying_handle() == nullptr; };
+
+    auto fill_bulk(
+        const transfer::info& transfer_info,
+        libusb_device_handle* const device_handle
+    ) -> usb::transfer::control;
+
+    auto fill_interrupt(
+        const transfer::info& transfer_info,
+        libusb_device_handle* const device_handle
+    ) -> usb::transfer::control;
+
+    auto fill_iso(
+        const transfer::info& transfer_info,
+        libusb_device_handle* const device_handle
+    ) -> usb::transfer::control;
+
+    template <typename XferFillMemberFn>
+    void submit_transfer_impl(
+        const transfer::info& transfer_info,
+        XferFillMemberFn fill_fn
+    );
+
+    auto make_opaque_transfer_control(
+        const viu::usb::transfer::control& control
+    ) -> viu_usb_mock_transfer_control_opaque;
+
     context_pointer libusb_context_{};
     device_handle_pointer device_handle_{};
     usb::device_id device_id_{};
     std::map<const std::uint8_t, const std::uint8_t> alt_settings_{};
-    usb::transfer::callback cb_{};
+    usb::transfer::pending_map pending_transfers_map_{};
 
 protected:
-    std::shared_ptr<viu_usb_mock_opaque> xfer_instance_{};
+    std::shared_ptr<viu_usb_mock_opaque> mock_iface_{};
     usb::descriptor::tree descriptor_tree_{};
 };
 
@@ -179,19 +207,13 @@ public:
     )
     {
         descriptor_tree_ = std::move(descriptor_tree);
-        xfer_instance_ = std::shared_ptr<viu_usb_mock_opaque>{
+        mock_iface_ = std::shared_ptr<viu_usb_mock_opaque>{
             xfer_instance,
             mock_opaque_deleter{}
         };
     }
 
-    [[nodiscard]] auto set_configuration(std::uint8_t index) -> int override;
     [[nodiscard]] auto is_self_powered() const -> bool override { return true; }
-
-    [[nodiscard]] auto submit_control_setup(
-        const libusb_control_setup& setup,
-        const std::vector<std::uint8_t>& data = {}
-    ) -> std::expected<std::vector<std::uint8_t>, int> override;
 
     [[nodiscard]] auto handle_events(
         const std::chrono::milliseconds& timeout,
@@ -213,9 +235,6 @@ private:
     {
         return nullptr;
     };
-
-    auto on_set_interface(std::uint8_t interface, std::uint8_t alt_setting)
-        -> int override;
 };
 
 } // namespace viu::usb

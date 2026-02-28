@@ -8,8 +8,8 @@ import viu.device.mock;
 import viu.device.proxy;
 import viu.error;
 import viu.plugin.catalog;
+import viu.plugin.interfaces;
 import viu.plugin.loader;
-import viu.tickable;
 import viu.usb.descriptors;
 
 export namespace viu::daemon {
@@ -51,31 +51,45 @@ public:
     auto execute_from_argv(int argc, const char* argv[]) -> viu::response;
 
 private:
+    struct device_info {
+        std::uint32_t vid{};
+        std::uint32_t pid{};
+        std::unique_ptr<viu::device::proxy> proxy{};
+    };
+
     auto get_subcommand(const std::span<const char*>& args) -> std::string;
     auto parse_command(
         const std::span<const char*>& args,
         const boost::program_options::options_description& desc
     ) -> boost::program_options::variables_map;
     auto app_proxy(
-        const std::uint32_t vid,
-        const std::uint32_t pid,
+        std::uint32_t vid,
+        std::uint32_t pid,
         const std::filesystem::path& catalog_path
     ) -> viu::response;
     auto app_save_config(
-        const std::uint32_t vid,
-        const std::uint32_t pid,
+        std::uint32_t vid,
+        std::uint32_t pid,
         const std::filesystem::path& path
     ) -> viu::response;
     auto app_save_hid_report(
-        const std::uint32_t vid,
-        const std::uint32_t pid,
+        std::uint32_t vid,
+        std::uint32_t pid,
         const std::filesystem::path& path
     ) -> viu::response;
     auto app_mock(
         const std::filesystem::path& device_config_path,
         const std::filesystem::path& catalog_path
     ) -> viu::response;
+    auto app_list_catalogs() -> viu::response;
+    auto app_plug(
+        const std::filesystem::path& config_path,
+        const std::filesystem::path& catalog_path,
+        const std::string& device_name
+    ) -> viu::response;
     auto app_version() -> viu::response;
+    auto app_list() -> viu::response;
+    auto app_unplug(std::uint64_t device_id) -> viu::response;
 
     void handle_accept(
         std::function<void()>& do_accept,
@@ -91,7 +105,13 @@ private:
     auto run_save_hid_report(const std::span<const char*>& args)
         -> viu::response;
     auto run_mock_command(const std::span<const char*>& args) -> viu::response;
+    auto run_list_catalogs_command(const std::span<const char*>& args)
+        -> viu::response;
+    auto run_plug_command(const std::span<const char*>& args) -> viu::response;
     auto run_version_command(const std::span<const char*>& args)
+        -> viu::response;
+    auto run_list_command(const std::span<const char*>& args) -> viu::response;
+    auto run_unplug_command(const std::span<const char*>& args)
         -> viu::response;
 
     auto check_cli_params(
@@ -100,11 +120,22 @@ private:
         std::initializer_list<std::string_view> params
     ) -> viu::result<void>;
 
+    auto create_mock_device_from_catalog(
+        const std::filesystem::path& catalog_path,
+        const std::string& device_name,
+        const viu::usb::descriptor::tree& dev_desc
+    ) -> void;
+    auto create_proxy_device_from_catalog(
+        std::uint32_t vid,
+        std::uint32_t pid,
+        const std::filesystem::path& catalog_path,
+        const std::string& device_name
+    ) -> void;
+
+    std::atomic<std::uint64_t> device_id_counter_{0};
     // TODO: Make them desctruction order independent
     viu::device::plugin::virtual_device_manager virtual_device_manager_{};
-    std::vector<std::unique_ptr<viu::device::mock>> mock_devices_{};
-    std::vector<std::unique_ptr<viu::device::proxy>> proxy_devices_{};
-    viu::tick_service tick_service_{};
+    std::map<std::uint64_t, device_info> virtual_devices_{};
 };
 
 } // namespace viu::daemon

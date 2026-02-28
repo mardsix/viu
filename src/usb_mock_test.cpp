@@ -42,10 +42,9 @@ struct test_device_mock final {
 
     int on_control_setup(
         [[maybe_unused]] libusb_control_setup setup,
-        [[maybe_unused]] const std::uint8_t* data,
+        [[maybe_unused]] std::uint8_t* data,
         [[maybe_unused]] std::size_t data_size,
-        [[maybe_unused]] std::uint8_t* out,
-        [[maybe_unused]] std::size_t* out_size
+        [[maybe_unused]] int result
     )
     {
         return LIBUSB_ERROR_NOT_SUPPORTED;
@@ -63,13 +62,6 @@ struct test_device_mock final {
     {
         return LIBUSB_SUCCESS;
     }
-
-    std::uint64_t tick_interval() const
-    {
-        return std::chrono::milliseconds{0}.count();
-    }
-
-    void tick() { EXPECT_TRUE(false); }
 
 private:
     std::array<std::vector<std::uint8_t>, 15> ep_data_{};

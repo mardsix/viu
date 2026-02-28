@@ -2,9 +2,10 @@ export module viu.plugin.catalog;
 
 import std;
 
-import viu.usb.mock.abi;
+import viu.error;
 import viu.plugin.interfaces;
 import viu.usb;
+import viu.usb.mock.abi;
 
 export namespace viu::device::plugin {
 
@@ -17,8 +18,7 @@ public:
     auto register_device_factory(const std::string& name, device_factory_fn f)
         -> catalog&
     {
-        viu_usb_mock_opaque* opaque = f();
-        entries_.push_back(std::make_pair(name, opaque));
+        entries_.push_back(std::make_pair(name, f));
         return *this;
     }
 
@@ -36,15 +36,15 @@ public:
     }
 
     auto device(const std::string& name) const
-        -> std::expected<viu_usb_mock_opaque*, error> override
+        -> viu::result<viu_usb_mock_opaque*> override
     {
         const auto it = std::ranges::find_if(entries_, [&name](const auto& p) {
             return p.first == name;
         });
         if (it == entries_.end()) {
-            return std::unexpected{viu::device::plugin::error::no_device};
+            return viu::make_error(viu::device::plugin::error::no_device);
         }
-        return it->second;
+        return it->second();
     }
 
     template <typename C>
@@ -55,7 +55,7 @@ public:
     }
 
 private:
-    using entry_type = std::pair<std::string, viu_usb_mock_opaque*>;
+    using entry_type = std::pair<std::string, device_factory_fn>;
 
     std::string name_{};
     std::string version_{};

@@ -44,6 +44,7 @@ void _assert(const bool exp, const std::source_location location)
     if (!exp) [[unlikely]] {
         log_location(location);
         log_stacktrace();
+        std::cout.flush();
 #if defined(VIU_ASSERT_ABORT)
         std::abort();
 #endif
