@@ -26,18 +26,18 @@ struct test_device_mock final {
 
     void on_transfer_request(viu_usb_mock_transfer_control_opaque xfer)
     {
-        const auto ep = xfer.ep(xfer.ctx) & 0x0f;
+        const auto ep = xfer.ep(&xfer) & 0x0f;
 
-        if (xfer.is_in(xfer.ctx)) {
-            xfer.fill(xfer.ctx, ep_data_[ep].data(), ep_data_[ep].size());
-        } else if (xfer.is_out(xfer.ctx)) {
-            const auto size = xfer.size(xfer.ctx);
+        if (xfer.is_in(&xfer)) {
+            xfer.fill(&xfer, ep_data_[ep].data(), ep_data_[ep].size());
+        } else if (xfer.is_out(&xfer)) {
+            const auto size = xfer.size(&xfer);
             auto read_buffer = usb::transfer::buffer_type(size);
-            xfer.read(xfer.ctx, read_buffer.data(), 0);
+            xfer.read(&xfer, read_buffer.data(), 0);
             ep_data_[ep] = read_buffer;
         }
 
-        xfer.complete(xfer.ctx);
+        xfer.complete(&xfer);
     }
 
     int on_control_setup(

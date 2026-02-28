@@ -366,34 +366,28 @@ struct recording_proxy final {
 
     void on_transfer_complete(viu_usb_mock_transfer_control_opaque xfer)
     {
-        if (xfer.is_in(xfer.ctx)) {
-            const auto size = xfer.size(xfer.ctx);
+        if (xfer.is_in(&xfer)) {
+            const auto size = xfer.size(&xfer);
             if (size > 0) {
                 auto data = std::vector<std::uint8_t>(
                     static_cast<std::size_t>(size)
                 );
-                xfer.read(
-                    xfer.ctx,
-                    data.data(),
-                    static_cast<std::uint32_t>(size)
-                );
+                xfer.read(&xfer, data.data(), static_cast<std::uint32_t>(size));
 
                 auto iso_descriptors =
                     std::vector<libusb_iso_packet_descriptor>{};
-                const auto iso_count = xfer.iso_packet_descriptor_count(
-                    xfer.ctx
-                );
+                const auto iso_count = xfer.iso_packet_descriptor_count(&xfer);
                 if (iso_count > 0) {
                     iso_descriptors.resize(iso_count);
                     xfer.read_iso_packet_descriptors(
-                        xfer.ctx,
+                        &xfer,
                         iso_descriptors.data(),
                         iso_count
                     );
                 }
 
                 auto record = transfer_record{
-                    .endpoint = xfer.ep(xfer.ctx),
+                    .endpoint = xfer.ep(&xfer),
                     .size = static_cast<std::uint32_t>(size),
                     .data = std::move(data),
                     .iso_descriptors = std::move(iso_descriptors),

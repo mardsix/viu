@@ -646,49 +646,61 @@ auto device::set_interface(std::uint8_t interface, std::uint8_t alt_setting)
     return result;
 }
 
+auto device::transfer_control_of(libusb_transfer* transfer)
+    -> viu::usb::transfer::control
+{
+    return viu::usb::transfer::control{transfer};
+}
+
 namespace {
 
-auto transfer_control_of(void* ctx) -> viu::usb::transfer::control
+auto transfer_control_of(viu_usb_mock_transfer_control_opaque* xfer)
+    -> viu::usb::transfer::control
 {
-    viu::_assert(ctx != nullptr);
-    auto* xfer = static_cast<libusb_transfer*>(ctx);
-    return viu::usb::transfer::control{xfer};
+    viu::_assert(xfer != nullptr);
+    auto* transfer = static_cast<libusb_transfer*>(xfer->ctx);
+    viu::_assert(transfer != nullptr);
+    auto* usb_dev = static_cast<device*>(xfer->device);
+    viu::_assert(usb_dev != nullptr);
+    return usb_dev->transfer_control_of(transfer);
 }
 
 extern "C" {
 
-void transfer_control_complete(void* ctx)
+void transfer_control_complete(
+    struct viu_usb_mock_transfer_control_opaque* xfer
+)
 {
-    transfer_control_of(ctx).complete();
+    transfer_control_of(xfer).complete();
 }
 
-bool transfer_control_is_in(void* ctx)
+bool transfer_control_is_in(struct viu_usb_mock_transfer_control_opaque* xfer)
 {
-    return transfer_control_of(ctx).is_in();
+    return transfer_control_of(xfer).is_in();
 }
 
-bool transfer_control_is_out(void* ctx)
+bool transfer_control_is_out(struct viu_usb_mock_transfer_control_opaque* xfer)
 {
-    return transfer_control_of(ctx).is_out();
+    return transfer_control_of(xfer).is_out();
 }
 
 void transfer_control_fill(
-    void* ctx,
+    struct viu_usb_mock_transfer_control_opaque* xfer,
     const std::uint8_t* data,
     std::size_t size
 )
 {
     auto vec = viu::format::unsafe::vectorize(data, size);
-    transfer_control_of(ctx).fill(vec);
+    transfer_control_of(xfer).fill(vec);
 }
 
 void transfer_control_read(
-    void* ctx,
+    struct viu_usb_mock_transfer_control_opaque* xfer,
     std::uint8_t* out_data,
     std::uint32_t size
 )
 {
-    auto control = transfer_control_of(ctx);
+    auto control = transfer_control_of(xfer);
     if (size == 0) {
         size = control.size();
     } else {
@@ -701,25 +713,32 @@ void transfer_control_read(
     }
 }
 
-int transfer_control_size(void* ctx) { return transfer_control_of(ctx).size(); }
-
-unsigned char transfer_control_type(void* ctx)
+int transfer_control_size(struct viu_usb_mock_transfer_control_opaque* xfer)
 {
-    return transfer_control_of(ctx).type();
+    return transfer_control_of(xfer).size();
 }
 
-std::uint8_t transfer_control_ep(void* ctx)
+unsigned char transfer_control_type(
+    struct viu_usb_mock_transfer_control_opaque* xfer
+)
 {
-    return transfer_control_of(ctx).ep();
+    return transfer_control_of(xfer).type();
+}
+
+std::uint8_t transfer_control_ep(
+    struct viu_usb_mock_transfer_control_opaque* xfer
+)
+{
+    return transfer_control_of(xfer).ep();
 }
 
 void transfer_control_read_iso_packet_descriptors(
-    void* ctx,
+    struct viu_usb_mock_transfer_control_opaque* xfer,
     struct libusb_iso_packet_descriptor* out_descriptors,
     size_t out_count
 )
 {
-    auto control = transfer_control_of(ctx);
+    auto control = transfer_control_of(xfer);
 
     if (control.iso_packet_descriptor_count() > 0 &&
         out_descriptors != nullptr) {
@@ -735,19 +754,21 @@ void transfer_control_read_iso_packet_descriptors(
     }
 }
 
-size_t transfer_control_iso_packet_descriptor_count(void* ctx)
+size_t transfer_control_iso_packet_descriptor_count(
+    struct viu_usb_mock_transfer_control_opaque* xfer
+)
 {
-    return transfer_control_of(ctx).iso_packet_descriptor_count();
+    return transfer_control_of(xfer).iso_packet_descriptor_count();
 }
 
 void transfer_control_fill_iso_packet_descriptors(
-    void* ctx,
+    struct viu_usb_mock_transfer_control_opaque* xfer,
     const struct libusb_iso_packet_descriptor* data,
     size_t size
 )
 {
     auto vec = viu::format::unsafe::vectorize(data, size);
-    transfer_control_of(ctx).fill_iso_packet_descriptors(vec);
+    transfer_control_of(xfer).fill_iso_packet_descriptors(vec);
 }
 }
 
@@ -759,6 +780,7 @@ auto device::make_opaque_transfer_control(
 {
     return viu_usb_mock_transfer_control_opaque{
         .ctx = control.underlying_transfer(),
+        .device = this,
         .complete = &transfer_control_complete,
         .is_in = &transfer_control_is_in,
         .is_out = &transfer_control_is_out,
@@ -787,7 +809,7 @@ void device::submit_transfer_impl(
 
     if (mock_iface_ != nullptr && mock_iface_->on_transfer_request != nullptr) {
         auto opaque_control = make_opaque_transfer_control(xfer_control);
-        mock_iface_->on_transfer_request(mock_iface_->ctx, opaque_control);
+        mock_iface_->on_transfer_request(mock_iface_.get(), &opaque_control);
     }
 
     if (!is_mock()) {
@@ -823,7 +845,7 @@ void device::on_transfer_completed(libusb_transfer* const xfer)
         mock_iface_->on_transfer_complete != nullptr) {
         auto control = viu::usb::transfer::control(xfer);
         auto opaque_control = make_opaque_transfer_control(control);
-        mock_iface_->on_transfer_complete(mock_iface_->ctx, opaque_control);
+        mock_iface_->on_transfer_complete(mock_iface_.get(), &opaque_control);
     }
 
     pending_transfers_map_.on_transfer_completed_impl(xfer);
@@ -975,7 +997,7 @@ auto device::submit_control_setup(
 
     if (mock_iface_ != nullptr && mock_iface_->on_control_setup != nullptr) {
         result = mock_iface_->on_control_setup(
-            mock_iface_->ctx,
+            mock_iface_.get(),
             setup,
             setup_data.data(),
             std::size(setup_data),

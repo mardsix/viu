@@ -442,7 +442,7 @@ struct playback_device final {
     void on_transfer_request(viu_usb_mock_transfer_control_opaque xfer)
     {
         // TODO: Playback all endpoints
-        if (xfer.ep(xfer.ctx) == 0x81) {
+        if (xfer.ep(&xfer) == 0x81) {
             std::lock_guard<std::mutex> lock(input_mutex_);
             input_.push(xfer);
         }
@@ -532,24 +532,24 @@ private:
                     xfer = input_.front();
                     input_.pop();
 
-                    if (xfer.is_in(xfer.ctx) &&
-                        record.endpoint == xfer.ep(xfer.ctx)) {
+                    if (xfer.is_in(&xfer) &&
+                        record.endpoint == xfer.ep(&xfer)) {
                         const auto write_size = std::min(
-                            static_cast<std::size_t>(xfer.size(xfer.ctx)),
+                            static_cast<std::size_t>(xfer.size(&xfer)),
                             record.data.size()
                         );
-                        xfer.fill(xfer.ctx, record.data.data(), write_size);
+                        xfer.fill(&xfer, record.data.data(), write_size);
 
                         if (!record.iso_descriptors.empty()) {
                             xfer.fill_iso_packet_descriptors(
-                                xfer.ctx,
+                                &xfer,
                                 record.iso_descriptors.data(),
                                 record.iso_descriptors.size()
                             );
                         }
                     }
 
-                    xfer.complete(xfer.ctx);
+                    xfer.complete(&xfer);
                 }
             }
 

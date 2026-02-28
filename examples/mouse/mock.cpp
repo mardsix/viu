@@ -43,7 +43,7 @@ struct mouse_mock final {
 
     void on_transfer_request(viu_usb_mock_transfer_control_opaque xfer)
     {
-        if (xfer.ep(xfer.ctx) == 0x81) {
+        if (xfer.ep(&xfer) == 0x81) {
             std::lock_guard<std::mutex> lock(input_mutex_);
             input_.push(xfer);
         }
@@ -115,8 +115,8 @@ struct mouse_mock final {
             if (!input_.empty()) {
                 xfer = input_.front();
                 input_.pop();
-                xfer.fill(xfer.ctx, report.data(), report.size());
-                xfer.complete(xfer.ctx);
+                xfer.fill(&xfer, report.data(), report.size());
+                xfer.complete(&xfer);
             }
         }
     }

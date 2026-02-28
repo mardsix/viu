@@ -117,6 +117,8 @@ public:
     void cancel_transfers();
 
     auto libusb_ctx() /*const*/ -> context_pointer& { return libusb_context_; }
+    auto transfer_control_of(libusb_transfer* transfer)
+        -> viu::usb::transfer::control;
 
 private:
     [[nodiscard]] virtual auto has_valid_handle() const noexcept -> bool;
