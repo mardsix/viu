@@ -83,7 +83,7 @@ public:
     ) const -> vector_type;
 
     [[nodiscard]] auto set_configuration(std::uint8_t index) -> int;
-    [[nodiscard]] virtual auto is_self_powered() const -> bool;
+    [[nodiscard]] auto is_self_powered() const -> bool;
     [[nodiscard]] auto speed() const noexcept -> std::uint16_t;
 
     [[nodiscard]] auto ep_transfer_type(std::uint8_t ep_address) const
@@ -118,7 +118,7 @@ public:
 
     auto libusb_ctx() /*const*/ -> context_pointer& { return libusb_context_; }
     auto transfer_control_of(libusb_transfer* transfer)
-        -> viu::usb::transfer::control;
+        -> usb::transfer::control;
 
 private:
     [[nodiscard]] virtual auto has_valid_handle() const noexcept -> bool;
@@ -184,9 +184,8 @@ private:
         XferFillMemberFn fill_fn
     );
 
-    auto make_opaque_transfer_control(
-        const viu::usb::transfer::control& control
-    ) -> viu_usb_mock_transfer_control_opaque;
+    auto make_opaque_transfer_control(const usb::transfer::control& control)
+        -> viu_usb_mock_transfer_control_opaque;
 
     context_pointer libusb_context_{};
     device_handle_pointer device_handle_{};
@@ -214,8 +213,6 @@ public:
             mock_opaque_deleter{}
         };
     }
-
-    [[nodiscard]] auto is_self_powered() const -> bool override { return true; }
 
     [[nodiscard]] auto handle_events(
         const std::chrono::milliseconds& timeout,

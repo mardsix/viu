@@ -17,7 +17,6 @@ import viu.usb.descriptors;
 
 using viu::usb::device;
 
-const auto self_powered_mask = std::uint8_t{0b01000000};
 const auto ep_transfer_type_mask = std::uint8_t{0b00000011};
 
 auto device::make_list() const
@@ -534,9 +533,7 @@ auto device::pack_report_descriptor() const -> vector_type
 
 auto device::is_self_powered() const -> bool
 {
-    auto config_desc = config_descriptor();
-    viu::_assert(config_desc != nullptr);
-    return (config_desc->bmAttributes & self_powered_mask) != 0;
+    return descriptor_tree_.device_config().is_self_powered();
 }
 
 auto device::save_config(const std::filesystem::path& path) const
@@ -649,6 +646,7 @@ auto device::set_interface(std::uint8_t interface, std::uint8_t alt_setting)
 auto device::transfer_control_of(libusb_transfer* transfer)
     -> viu::usb::transfer::control
 {
+    // TODO: check pending transfers
     return viu::usb::transfer::control{transfer};
 }
 

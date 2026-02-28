@@ -73,6 +73,8 @@ export struct pending_map {
 
 private:
     void wait_for_canceled_transfers();
+    auto give_away_transfer(libusb_transfer* const transfer)
+        -> viu::usb::transfer::pointer;
 
     std::shared_mutex mutex_;
     std::map<id_type, callback_type> pending_transfers_;

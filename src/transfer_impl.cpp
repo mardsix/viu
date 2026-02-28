@@ -12,9 +12,8 @@ import viu.usb;
 
 namespace viu::usb::transfer {
 
-namespace {
-
-auto give_away_transfer(libusb_transfer* const transfer)
+auto pending_map::give_away_transfer(libusb_transfer* const transfer)
+    -> viu::usb::transfer::pointer
 {
     return viu::usb::transfer::pointer{
         transfer,
@@ -26,8 +25,6 @@ auto give_away_transfer(libusb_transfer* const transfer)
         }
     };
 }
-
-} // namespace
 
 void pending_map::on_transfer_completed_impl(libusb_transfer* const transfer)
 {

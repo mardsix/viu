@@ -132,7 +132,14 @@ export struct config final : basic_descriptor<
     attribute::with_extra,
     viu::vector::key_list<key::interface>,
     viu::vector::type_list<usb_interface>
-> {};
+> {
+    static constexpr auto self_powered_mask = std::uint8_t{0b10000000};
+
+    [[nodiscard]] auto is_self_powered() -> bool
+    {
+        return (wrapped().bmAttributes & self_powered_mask) != 0;
+    }
+};
 
 export struct bos_dev_capability_descriptor final : basic_descriptor<
     libusb_bos_dev_capability_descriptor,
